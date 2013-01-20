@@ -121,7 +121,7 @@ end
 end
 
 type MRIVolume{T}
-	volume::Array{T}
+	raw::Array{T}
 end
 
 type NIFTI1Extension
