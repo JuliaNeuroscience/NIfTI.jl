@@ -18,57 +18,15 @@
 
 module NIFTI
 
-import Base.read
-export niftiread
+using StrPack
+import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof
+export niftiread, voxelsize, tr, vox
 
-function struct_string(fn::Function, bytes::Vector{Uint8})
-    last_byte = findfirst(bytes, 0)
-    fn(last_byte == 0 ? bytes : bytes[1:last_byte-1])
+macro a(xpr...)
+	println(xpr)
 end
 
-macro struct(typename, contents)
-	if contents.head != :block
-		error("Invalid struct declaration")
-	end
-
-	blk = expr(:call, typename)
-
-	for typedecl in contents.args
-		if isa(typedecl, LineNumberNode)
-			continue
-		elseif typedecl.head != :(::)
-			error("Invalid struct declaration")
-		end
-		fieldname = typedecl.args[1]
-		fieldtype = typedecl.args[2]
-		if isa(fieldtype, Expr)
-			if fieldtype.head != :call
-				error("Invalid struct declaration")
-			end
-			# Type has size parameters
-
-			if contains((:ASCIIString, :UTF8String, :String), fieldtype.args[1])
-				typedecl.args[2] = fieldtype.args[1]
-				push!(blk.args, :(struct_string($(fieldtype.args[1] == :ASCIIString ? :ascii : :utf8), read(ios, Uint8, ($(fieldtype.args[2:end]...))))))
-			else
-				typedecl.args[2] = :(Array{$(fieldtype.args[1]), $(length(fieldtype.args)-1)})
-				push!(blk.args, :(read(ios, $(fieldtype.args[1]), ($(transpose(fieldtype.args[2:end])...)))))
-			end
-		else
-			push!(blk.args, :(read(ios, $fieldtype)))
-		end
-	end
-	
-	quote
-		global read
-		type $typename
-			$contents
-		end
-		read(ios::IOStream, ::Type{$typename}) = $blk
-	end
-end
-
-@struct NIFTI1Header begin
+@struct type NIFTI1Header
 	sizeof_hdr::Int32
 	data_type::ASCIIString(10)
 	db_name::ASCIIString(18)
@@ -77,7 +35,7 @@ end
 	regular::Int8
 	dim_info::Int8
 
-	dim::Int16(8)
+	dim::Vector{Int16}(8)
 	intent_p1::Float32
 	intent_p2::Float32
 	intent_p3::Float32
@@ -85,7 +43,7 @@ end
 	datatype::Int16
 	bitpix::Int16
 	slice_start::Int16
-	pixdim::Float32(8)
+	pixdim::Vector{Float32}(8)
 	vox_offset::Float32
 	scl_slope::Float32
 	scl_inter::Float32
@@ -111,28 +69,24 @@ end
 	qoffset_y::Float32
 	qoffset_z::Float32
 
-	srow_x::Float32(4)
-	srow_y::Float32(4)
-	srow_z::Float32(4)
+	srow_x::Vector{Float32}(4)
+	srow_y::Vector{Float32}(4)
+	srow_z::Vector{Float32}(4)
 
 	intent_name::ASCIIString(16)
 
 	magic::ASCIIString(4)
-end
-
-type MRIVolume{T}
-	raw::Array{T}
-end
+end align_packed
 
 type NIFTI1Extension
 	code::Int32
 	edata::Vector{Uint8}
 end
 
-type NIFTIFile
+type NIFTIFile{T}
 	header::NIFTI1Header
 	extensions::Vector{NIFTI1Extension}
-	volume::MRIVolume
+	raw::Array{T}
 end
 
 const NIFTI_DT_BITSTYPES = (Int8=>Type)[
@@ -150,8 +104,25 @@ const NIFTI_DT_BITSTYPES = (Int8=>Type)[
 	1792 => Complex128
 ]
 
-function niftiread_header(io::IO)
-	header = read(io, NIFTI1Header)
+# Conversion factors to mm/ms
+# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
+const SPATIAL_UNIT_MULTIPLIERS = [
+	1000,	# 1 => NIFTI_UNITS_METER
+	1,		# 2 => NIFTI_UNITS_MM
+	0.001	# 3 => NIFTI_UNITS_MICRON
+]
+const TIME_UNIT_MULTIPLIERS = [
+	1000,	# NIFTI_UNITS_SEC
+	1,		# NIFTI_UNITS_MSEC
+	0.001,	# NIFTI_UNITS_USEC
+	1,		# NIFTI_UNITS_HZ
+	1,		# NIFTI_UNITS_PPM
+	1		# NIFTI_UNITS_RADS
+]
+
+# Read header from a NIFTI file
+function read_header(io::IO)
+	header = unpack(io, NIFTI1Header)
 	if header.sizeof_hdr != 348
 		error("This is not a NIFTI-1 file")
 	end
@@ -161,7 +132,8 @@ function niftiread_header(io::IO)
 	header
 end
 
-function nifitread_extensions(io::IO, header::NIFTI1Header)
+# Read extension fields following NIFTI header
+function read_extensions(io::IO, header::NIFTI1Header)
 	if eof(io)
 		return NIFTI1Extension[]
 	end
@@ -187,11 +159,13 @@ function nifitread_extensions(io::IO, header::NIFTI1Header)
 	extensions
 end
 
-function niftiread(file::String, mmap::Bool)
+# Read a NIFTI file. The optional mmap argument determines whether the contents are read in full
+# (if false) or mmaped from the disk (if true).
+function niftiread(file::String; mmap::Bool=false)
 	header_io = open(file, "r")
-	header = niftiread_header(header_io)
-	extensions = nifitread_extensions(header_io, header)
-	dims = tuple(int(reverse(header.dim[2:header.dim[1]+1]))...)
+	header = read_header(header_io)
+	extensions = read_extensions(header_io, header)
+	dims = tuple(int(header.dim[2:header.dim[1]+1])...)
 
 	if !has(NIFTI_DT_BITSTYPES, header.datatype)
 		error("Data type $(header.datatype) not yet supported")
@@ -205,6 +179,7 @@ function niftiread(file::String, mmap::Bool)
 		else
 			seek(header_io, int(header.vox_offset))
 			volume = read(header_io, dtype, dims)
+			@assert eof(header_io)
 			close(header_io)
 		end
 	elseif header.magic == "nil"
@@ -218,8 +193,24 @@ function niftiread(file::String, mmap::Bool)
 		end
 	end
 
-	return NIFTIFile(header, extensions, MRIVolume(volume))
+	return NIFTIFile(header, extensions, volume)
 end
-niftiread(file::String) = niftiread(file, false)
+
+# Always in mm
+voxelsize(header::NIFTI1Header) =
+	header.pixdim[2:4] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & 7]
+
+# Always in ms
+tr(header::NIFTI1Header) = header.pixdim[5] * TIME_UNIT_MULTIPLIERS[header.xyzt_units >> 3]
+
+# Allow file to be indexed like an array, but with indices yielding scaled data
+getindex(f::NIFTIFile, args...) = getindex(f.raw, args...) * f.header.scl_slope + f.header.scl_inter
+vox(f::NIFTIFile, args...) =
+	getindex(f, [isa(args[i], Colon) ? (1:size(f.raw, i)) : args[i] + 1 for i = 1:length(args)]...)
+size(f::NIFTIFile) = size(f.raw)
+size(f::NIFTIFile, d) = size(f.raw, d)
+ndims(f::NIFTIFile) = ndims(f.raw)
+length(f::NIFTIFile) = length(f.raw)
+endof(f::NIFTIFile) = endof(f.raw)
 
 end
