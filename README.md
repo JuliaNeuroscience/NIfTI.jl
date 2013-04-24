@@ -26,7 +26,7 @@ tr = time_step(ni.header)        # In ms
 ```
 
 To get the value of the volume along a given dimension:
-```
+```julia
 d = vox(ni, x, y, z, t)       # Scaled by slope and intercept given in header, zero-based indexes
 d = ni[x, y, z, t]            # Scaled by slope and intercept given in header, one-based indexes
 d = ni.raw[x, y, z, t]        # Unscaled, one-based indexes
