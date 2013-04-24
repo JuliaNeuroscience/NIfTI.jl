@@ -3,16 +3,17 @@ NIfTI.jl
 
 ## Usage
 
-To read a NIFTI file:
+To read a NIfTI file:
 
 ```julia
+using NIfTI
 ni = niftiread("my.nii")
 ```
 
-The header is in `nii.header`; NIFTI extensions are in `nii.extensions`; the raw
+The header is in `nii.header`; NIfTI extensions are in `nii.extensions`; the raw
 volume is in `nii.raw`.
 
-To mmap the NIFTI file:
+To mmap the NIfTI file:
 
 ```julia
 ni = niftiread("my.nii", true)
