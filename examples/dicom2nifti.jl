@@ -5,9 +5,8 @@
 # files and sorts them into volumes. It then creates directories corresponding
 # to each protocol, and saves nii files named by series number. It has
 # (barely) been tested with DICOM files from a Siemens scanner. It may not
-# work with other scanners. At present, it doesn't save orientation or slice
-# information in the resulting NIfTI volumes, so DO NOT USE IT FOR ANYTHING
-# BUT TESTING.
+# work with other scanners. It may give incorrect information. Test thoroughly
+# and use at your own risk.
 
 # Copyright (C) 2013   Simon Kornblith
 
@@ -41,14 +40,16 @@ function walk(fn::Function, path::String)
 end
 
 function findtag(d, tag, from, what)
-	idx = findfirst((x) -> x.tag == tag, d)
-	if idx == 0
+	tag = lookup(d, tag)
+	if tag == false
 		error("$what missing from $from")
 	end
-	d[idx].data
+	tag.data
 end
 
 function run()
+	const LPS_TO_RAS = [-1 0 0; 0 -1 0; 0 0 1]
+
 	# Load all DICOMs into an array, indexed by series number
 	dicoms = Dict{Int, Any}()
 	walk(".") do fpath
@@ -81,29 +82,49 @@ function run()
 		d = slices[1]
 
 		protocol_name = findtag(d, (0x0018, 0x1030), series_number, "Protocol Name")[1]
-		image_position = findtag(d, (0x0020, 0x0032), series_number,
-			"Image Position (Patient)")
-		image_orientation = findtag(d, (0x0020, 0x0037), series_number,
+		orientation = findtag(d, (0x0020, 0x0037), series_number,
 			"Image Orientation (Patient)")
+		pixel_spacing = findtag(d, (0x0028, 0x0030), series_number, "Pixel Spacing")
+		slice_thickness = findtag(d, (0x0018, 0x0050), series_number, "Slice Thickness")[1]
+		time_step = lookup(d, (0x0018, 0x0080)) # This is the TR, but may not be the time step
+		phase_encoding_direction = lookup(d, (0x0018, 0x1312))
 
-		# Sort slices
-		# Formulae taken from http://nipy.sourceforge.net/nibabel/dicom/dicom_orientation.html
-		z_dir_cos = cross(image_orientation[1:3], image_orientation[4:6])
-		z_coord = sortby!(slices,
-			(d) -> dot(findtag(d, (0x0020, 0x0032), series_number, "Image Position (Patient)"),
-				z_dir_cos))
+		# Convert LPS orentation to RAS
+		orientation = LPS_TO_RAS*reshape(orientation, (3, 2))
 
+		# Determine Z as cross product of X and Y
+		orientation = hcat(orientation, cross(orientation[:, 1], orientation[:, 2]))
+
+		# Scale by pixel size
+		orientation = orientation*[pixel_spacing[1] 0 0; 0 pixel_spacing[2] 0; 0 0 slice_thickness]
+
+		# Find Z coordinates of each slice
+		image_positions = LPS_TO_RAS*hcat(
+			[findtag(d, (0x0020, 0x0032), series_number, "Image Position (Patient)")
+			for d in slices]...)
+		z_coords = [dot(image_positions[:, i], orientation[:, 3])
+			for i = 1:size(image_positions, 2)]
+
+		# Sort Z coordinates
+		p = sortperm(z_coords)
+
+		# Concatenate slices along Z axis according to increasing Z coordinate
 		raw = cat(3,
-			[findtag(d, (0x7FE0, 0x0010), series_number, "Pixel Data")[1] for d in slices]...)
+			[findtag(slices[i], (0x7FE0, 0x0010), series_number, "Pixel Data")[1] for i in p]...)
 
-		# Create a name for each protocol
+		# Create a directory for each protocol
 		protocol_dir = replace(protocol_name, "/", "")
 		if !isdir(protocol_dir)
 			mkdir(protocol_dir)
 		end
 
 		# Write NIfTI volumes
-		ni = NIfTIVolume(raw)
+		ni = NIfTIVolume(raw; voxel_size=tuple(pixel_spacing..., slice_thickness),
+			orientation=float32(hcat(orientation, image_positions[:, p[1]])),
+			dim_info=(phase_encoding_direction == "ROW" ? (1, 2, 3) :
+				phase_encoding_direction == "COL" ? (2, 1, 3) :
+				(0, 0, 0)),
+			time_step=time_step != false ? time_step : 0f0)
 		niftiwrite(joinpath(protocol_dir, "$(series_number).nii"), ni)
 	end
 end
