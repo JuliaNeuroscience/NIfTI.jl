@@ -193,7 +193,7 @@ slice_start::Integer=int16(0), slice_end::Integer=int16(0), slice_code::Int8=int
 # explicitly specified
 voxel_size::NTuple{3, Real}=(1f0, 1f0, 1f0), time_step::Real=0f0, xyzt_units::Int8=int8(18),
 # Slope and intercept by which volume shoudl be scaled
-scl_slope::Real=0f0, scl_inter::Real=0f0,
+scl_slope::Real=1f0, scl_inter::Real=0f0,
 # These describe how data should be scaled when displayed on the screen. They are probably
 # rarely used
 cal_max::Real=0f0, cal_min::Real=0f0,
@@ -207,13 +207,11 @@ descrip::String="",
 # Name of auxiliary file
 aux_file::String="",
 
-# Orientation
-qform_code::Integer=int16(0), sform_code::Integer=int16(1), 
 # Parameters for Method 2. See the NIfTI spec
-qfac::Float32=1f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
+qfac::Float32=0f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
 qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
 # Orientation matrix for Method 3
-orientation::Matrix{Float32}=Float32[1 0 0 0; 0 1 0 0; 0 0 1 0])
+orientation::Union(Matrix{Float32}, Nothing)=nothing)
 	local t
 	if isempty(raw)
 		raw = Int16[]
@@ -225,8 +223,26 @@ orientation::Matrix{Float32}=Float32[1 0 0 0; 0 1 0 0; 0 0 1 0])
 	if extensions == nothing
 		extensions = NIfTI1Extension[]
 	end
-	if size(orientation) != (3, 4)
-		error("Orientation matrix must be of dimensions (3, 4)")
+
+	method2 = qfac != 0 || quatern_b != 0 || quatern_c != 0 || quatern_d != 0 || qoffset_x != 0 ||
+		qoffset_y != 0 || qoffset_z != 0
+	method3 = orientation != nothing
+
+	if method2 && method3
+		error("Orientation parameters for Method 2 and Method 3 are mutually exclusive")
+	end
+
+	if method3
+		if size(orientation) != (3, 4)
+			error("Orientation matrix must be of dimensions (3, 4)")
+		end
+	else
+		orientation = zeros(3, 4)
+	end
+
+	if slice_start == 0 && slice_end == 0 && dim_info[3] != 0
+		slice_start = 0
+		slice_end = size(raw, dim_info[3]) - 1
 	end
 
 	NIfTIVolume(NIfTI1Header(SIZEOF_HDR, data_type, db_name, int32(extents), int16(session_error),
@@ -235,8 +251,8 @@ orientation::Matrix{Float32}=Float32[1 0 0 0; 0 1 0 0; 0 0 1 0])
 		int16(slice_start), float32([qfac, voxel_size..., time_step, 0, 0, 0]), float32(352),
 		float32(scl_slope), float32(scl_inter), int16(slice_end), int8(slice_code),
 		int8(xyzt_units), float32(cal_max), float32(cal_min), float32(slice_duration),
-		float32(toffset), int32(glmax), int32(glmin), descrip, aux_file, int16(qform_code),
-		int16(sform_code), float32(quatern_b), float32(quatern_c), float32(quatern_d),
+		float32(toffset), int32(glmax), int32(glmin), descrip, aux_file, int16(method2 || method3),
+		int16(method3), float32(quatern_b), float32(quatern_c), float32(quatern_d),
 		float32(qoffset_x), float32(qoffset_y), float32(qoffset_z), orientation[1, :][:],
 		orientation[2, :][:], orientation[3, :][:], intent_name, "n+1"), extensions, raw)
 end
