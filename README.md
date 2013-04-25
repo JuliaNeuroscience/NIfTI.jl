@@ -21,7 +21,7 @@ ni = niftiread("my.nii", true)
 
 To get the TR and voxel size:
 ```julia
-vsize = voxel_size(ni.header)     # In mm
+vsize = voxel_size(ni.header)    # In mm
 tr = time_step(ni.header)        # In ms
 ```
 

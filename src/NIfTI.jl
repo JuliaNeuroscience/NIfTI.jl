@@ -152,7 +152,7 @@ dim_info{T <: Integer}(header::NIfTI1Header, dim_info::(T, T, T)) =
 
 # Gets dim to be used in header
 function niftidim(x::Array)
-	dim = zeros(Int16, 8)
+	dim = ones(Int16, 8)
 	dim[1] = ndims(x)
 	dim[2:dim[1]+1] = [size(x)...]
 	dim
@@ -170,21 +170,10 @@ end
 # Gets the size of a type in bits
 niftibitpix(t::Type) = int16(sizeof(t)*8)
 
-# Validates srow values
-function validate_srow(srow_x::Vector{Float32}, srow_y::Vector{Float32}, srow_z::Vector{Float32})
-	if length(srow_x) != 4
-		error("srow_x must have 4 values; $(length(srow_x)) encountered")
-	elseif length(srow_y) != 4
-		error("srow_y must have 4 values; $(length(srow_y)) encountered")
-	elseif length(srow_z) != 4
-		error("srow_z must have 4 values; $(length(srow_z)) encountered")
-	end
-end
-
 # Constructor
-function NIfTIVolume{T <: Union(Number, Nothing)}(
+function NIfTIVolume{T <: Number}(
 # Optional MRI volume; if not given, an empty volume is used
-raw::T=nothing,
+raw::Array{T}=Int16[],
 extensions::Union(Vector{NIfTI1Extension}, Nothing)=nothing;
 
 # Fields specified as UNUSED in NIfTI1 spec
@@ -202,7 +191,7 @@ intent_code::Integer=int16(0), intent_name::String="",
 slice_start::Integer=int16(0), slice_end::Integer=int16(0), slice_code::Int8=int8(0),
 # The size of each voxel and the time step. These are formulated in mm unless xyzt_units is
 # explicitly specified
-voxel_size::NTuple{3, Real}=(0f0, 0f0, 0f0), time_step::Real=0f0, xyzt_units::Int8=int8(18),
+voxel_size::NTuple{3, Real}=(1f0, 1f0, 1f0), time_step::Real=0f0, xyzt_units::Int8=int8(18),
 # Slope and intercept by which volume shoudl be scaled
 scl_slope::Real=0f0, scl_inter::Real=0f0,
 # These describe how data should be scaled when displayed on the screen. They are probably
@@ -218,13 +207,15 @@ descrip::String="",
 # Name of auxiliary file
 aux_file::String="",
 
-# Transform of NIfTI file. See NIfTI spec
-qform_code::Integer=int16(0), sform_code::Integer=int16(0), quatern_b::Real=0f0,
-quatern_c::Real=0f0, quatern_d::Real=0f0, qoffset_x::Real=0f0, qoffset_y::Real=0f0,
-qoffset_z::Real=0f0, srow_x::Vector{Float32}=Float32[0, 0, 0, 0],
-srow_y::Vector{Float32}=Float32[0, 0, 0, 0], srow_z::Vector{Float32}=Float32[0, 0, 0, 0])
+# Orientation
+qform_code::Integer=int16(0), sform_code::Integer=int16(1), 
+# Parameters for Method 2. See the NIfTI spec
+qfac::Float32=1f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
+qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
+# Orientation matrix for Method 3
+orientation::Matrix{Float32}=Float32[1 0 0 0; 0 1 0 0; 0 0 1 0])
 	local t
-	if raw == nothing
+	if isempty(raw)
 		raw = Int16[]
 		t = Int16
 	else
@@ -234,19 +225,20 @@ srow_y::Vector{Float32}=Float32[0, 0, 0, 0], srow_z::Vector{Float32}=Float32[0, 
 	if extensions == nothing
 		extensions = NIfTI1Extension[]
 	end
-
-	validate_srow(srow_x, srow_y, srow_z)
+	if size(orientation) != (3, 4)
+		error("Orientation matrix must be of dimensions (3, 4)")
+	end
 
 	NIfTIVolume(NIfTI1Header(SIZEOF_HDR, data_type, db_name, int32(extents), int16(session_error),
 		int8(regular), to_dim_info(dim_info), niftidim(raw), float32(intent_p1), float32(intent_p2),
 		float32(intent_p3), int16(intent_code), niftidatatype(t), niftibitpix(t), 
-		int16(slice_start), float32([voxel_size..., time_step, 0, 0, 0, 0]), float32(352),
+		int16(slice_start), float32([qfac, voxel_size..., time_step, 0, 0, 0]), float32(352),
 		float32(scl_slope), float32(scl_inter), int16(slice_end), int8(slice_code),
 		int8(xyzt_units), float32(cal_max), float32(cal_min), float32(slice_duration),
 		float32(toffset), int32(glmax), int32(glmin), descrip, aux_file, int16(qform_code),
 		int16(sform_code), float32(quatern_b), float32(quatern_c), float32(quatern_d),
-		float32(qoffset_x), float32(qoffset_y), float32(qoffset_z), srow_x, srow_y, srow_z,
-		intent_name, "n+1"), extensions, raw)
+		float32(qoffset_x), float32(qoffset_y), float32(qoffset_z), orientation[1, :][:],
+		orientation[2, :][:], orientation[3, :][:], intent_name, "n+1"), extensions, raw)
 end
 
 # Calculates the size of a NIfTI extension
@@ -254,7 +246,14 @@ esize(ex::NIfTI1Extension) = 8 + iceil(length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niftiupdate{T}(vol::NIfTIVolume{T})
-	validate_srow(vol.header.srow_x, vol.header.srow_y, vol.header.srow_z)
+	if length(vol.header.srow_x) != 4
+		error("srow_x must have 4 values; $(length(srow_x)) encountered")
+	elseif length(vol.header.srow_y) != 4
+		error("srow_y must have 4 values; $(length(srow_y)) encountered")
+	elseif length(vol.header.srow_z) != 4
+		error("srow_z must have 4 values; $(length(srow_z)) encountered")
+	end
+
 	vol.header.sizeof_hdr = SIZEOF_HDR
 	vol.header.dim = niftidim(vol.raw)
 	vol.header.datatype = niftidatatype(T)
