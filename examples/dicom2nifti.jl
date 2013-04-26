@@ -23,7 +23,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-using DICOM, NIfTI
+using DICOM, NIfTI, ArgParse
+
+function parse_commandline()
+	s = ArgParseSettings()
+	s.description = "DICOM to NIfTI converter"
+
+	@add_arg_table s begin
+		"--sphinx"
+			help = "correct for sphinx position (for monkeys)"
+			action = :store_true
+		"dicomdir"
+			help = "directory of DICOM files"
+			required = true
+		"niftidir"
+			help = "directory in which to put NIfTI files"
+			required = true
+	end
+
+	parse_args(s)
+end
 
 function walk(fn::Function, path::String)
     for fname in readdir(path)
@@ -47,12 +66,14 @@ function findtag(d, tag, from, what)
 	tag.data
 end
 
-function run()
-	const LPS_TO_RAS = [-1 0 0; 0 -1 0; 0 0 1]
+function main()
+	cmd = parse_commandline()
+
+	transform = cmd["sphinx"] ? [-1 0 0; 0 0 1; 0 -1 0] : [-1 0 0; 0 -1 0; 0 0 1]
 
 	# Load all DICOMs into an array, indexed by series number
 	dicoms = Dict{Int, Any}()
-	walk(".") do fpath
+	walk(cmd["dicomdir"]) do fpath
 		local d
 		f = open(fpath, "r")
 		try
@@ -90,7 +111,7 @@ function run()
 		phase_encoding_direction = lookup(d, (0x0018, 0x1312))
 
 		# Convert LPS orentation to RAS
-		orientation = LPS_TO_RAS*reshape(orientation, (3, 2))
+		orientation = transform*reshape(orientation, (3, 2))
 
 		# Determine Z as cross product of X and Y
 		orientation = hcat(orientation, cross(orientation[:, 1], orientation[:, 2]))
@@ -99,7 +120,7 @@ function run()
 		orientation = orientation*[pixel_spacing[1] 0 0; 0 pixel_spacing[2] 0; 0 0 slice_thickness]
 
 		# Find Z coordinates of each slice
-		image_positions = LPS_TO_RAS*hcat(
+		image_positions = transform*hcat(
 			[findtag(d, (0x0020, 0x0032), series_number, "Image Position (Patient)")
 			for d in slices]...)
 		z_coords = [dot(image_positions[:, i], orientation[:, 3])
@@ -113,7 +134,7 @@ function run()
 			[findtag(slices[i], (0x7FE0, 0x0010), series_number, "Pixel Data")[1] for i in p]...)
 
 		# Create a directory for each protocol
-		protocol_dir = replace(protocol_name, "/", "")
+		protocol_dir = joinpath(cmd["niftidir"], replace(protocol_name, "/", ""))
 		if !isdir(protocol_dir)
 			mkdir(protocol_dir)
 		end
@@ -121,12 +142,12 @@ function run()
 		# Write NIfTI volumes
 		ni = NIfTIVolume(raw; voxel_size=tuple(pixel_spacing..., slice_thickness),
 			orientation=float32(hcat(orientation, image_positions[:, p[1]])),
-			dim_info=(phase_encoding_direction == "ROW" ? (1, 2, 3) :
-				phase_encoding_direction == "COL" ? (2, 1, 3) :
+			dim_info=(phase_encoding_direction.data[1] == "ROW" ? (1, 2, 3) :
+				phase_encoding_direction.data[1] == "COL" ? (2, 1, 3) :
 				(0, 0, 0)),
-			time_step=time_step != false ? time_step : 0f0)
+			time_step=time_step != false ? time_step.data[1] : 0f0)
 		niftiwrite(joinpath(protocol_dir, "$(series_number).nii"), ni)
 	end
 end
 
-run()
+main()
