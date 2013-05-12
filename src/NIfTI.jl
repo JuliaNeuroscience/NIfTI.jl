@@ -353,7 +353,7 @@ function niftiread(file::String; mmap::Bool=false)
 	extensions = read_extensions(header_io, header)
 	dims = tuple(int(header.dim[2:header.dim[1]+1])...)
 
-	if !has(NIfTI_DT_BITSTYPES, header.datatype)
+	if !haskey(NIfTI_DT_BITSTYPES, header.datatype)
 		error("Data type $(header.datatype) not yet supported")
 	end
 	dtype = NIfTI_DT_BITSTYPES[header.datatype]
