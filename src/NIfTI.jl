@@ -237,7 +237,7 @@ orientation::Union(Matrix{Float32}, Nothing)=nothing)
 			error("Orientation matrix must be of dimensions (3, 4)")
 		end
 	else
-		orientation = zeros(3, 4)
+		orientation = zeros(Float32, 3, 4)
 	end
 
 	if slice_start == 0 && slice_end == 0 && dim_info[3] != 0
@@ -353,7 +353,7 @@ function niftiread(file::String; mmap::Bool=false)
 	extensions = read_extensions(header_io, header)
 	dims = tuple(int(header.dim[2:header.dim[1]+1])...)
 
-	if !haskey(NIfTI_DT_BITSTYPES, header.datatype)
+	if !has(NIfTI_DT_BITSTYPES, header.datatype)
 		error("Data type $(header.datatype) not yet supported")
 	end
 	dtype = NIfTI_DT_BITSTYPES[header.datatype]
