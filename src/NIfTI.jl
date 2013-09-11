@@ -20,7 +20,7 @@ module NIfTI
 
 using StrPack
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
-export NIfTIVolume, niftiread, niftiwrite, voxel_size, time_step, vox
+export NIVolume, niread, niwrite, voxel_size, time_step, vox
 
 @struct type NIfTI1Header
 	sizeof_hdr::Int32
@@ -81,10 +81,10 @@ type NIfTI1Extension
 	edata::Vector{Uint8}
 end
 
-type NIfTIVolume{T <: Number}
+type NIVolume{T<:Number,N}
 	header::NIfTI1Header
 	extensions::Vector{NIfTI1Extension}
-	raw::Array{T}
+	raw::Array{T,N}
 end
 
 const SIZEOF_HDR = int32(348)
@@ -151,7 +151,7 @@ dim_info{T <: Integer}(header::NIfTI1Header, dim_info::(T, T, T)) =
 	header.dim_info = to_dim_info(dim_info)
 
 # Gets dim to be used in header
-function niftidim(x::Array)
+function nidim(x::Array)
 	dim = ones(Int16, 8)
 	dim[1] = ndims(x)
 	dim[2:dim[1]+1] = [size(x)...]
@@ -159,7 +159,7 @@ function niftidim(x::Array)
 end
 
 # Gets datatype to be used in header
-function niftidatatype(t::Type)
+function nidatatype(t::Type)
 	t = get(NIfTI_DT_BITSTYPES_REVERSE, t, nothing)
 	if t == nothing
 		error("Unsupported data type $T")
@@ -168,10 +168,10 @@ function niftidatatype(t::Type)
 end
 
 # Gets the size of a type in bits
-niftibitpix(t::Type) = int16(sizeof(t)*8)
+nibitpix(t::Type) = int16(sizeof(t)*8)
 
 # Constructor
-function NIfTIVolume{T <: Number}(
+function NIVolume{T <: Number}(
 # Optional MRI volume; if not given, an empty volume is used
 raw::Array{T}=Int16[],
 extensions::Union(Vector{NIfTI1Extension}, Nothing)=nothing;
@@ -245,9 +245,9 @@ orientation::Union(Matrix{Float32}, Nothing)=nothing)
 		slice_end = size(raw, dim_info[3]) - 1
 	end
 
-	NIfTIVolume(NIfTI1Header(SIZEOF_HDR, data_type, db_name, int32(extents), int16(session_error),
-		int8(regular), to_dim_info(dim_info), niftidim(raw), float32(intent_p1), float32(intent_p2),
-		float32(intent_p3), int16(intent_code), niftidatatype(t), niftibitpix(t), 
+	NIVolume(NIfTI1Header(SIZEOF_HDR, data_type, db_name, int32(extents), int16(session_error),
+		int8(regular), to_dim_info(dim_info), nidim(raw), float32(intent_p1), float32(intent_p2),
+		float32(intent_p3), int16(intent_code), nidatatype(t), nibitpix(t), 
 		int16(slice_start), float32([qfac, voxel_size..., time_step, 0, 0, 0]), float32(352),
 		float32(scl_slope), float32(scl_inter), int16(slice_end), int8(slice_code),
 		int8(xyzt_units), float32(cal_max), float32(cal_min), float32(slice_duration),
@@ -261,7 +261,7 @@ end
 esize(ex::NIfTI1Extension) = 8 + iceil(length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
-function niftiupdate{T}(vol::NIfTIVolume{T})
+function niupdate{T}(vol::NIVolume{T})
 	if length(vol.header.srow_x) != 4
 		error("srow_x must have 4 values; $(length(srow_x)) encountered")
 	elseif length(vol.header.srow_y) != 4
@@ -271,19 +271,19 @@ function niftiupdate{T}(vol::NIfTIVolume{T})
 	end
 
 	vol.header.sizeof_hdr = SIZEOF_HDR
-	vol.header.dim = niftidim(vol.raw)
-	vol.header.datatype = niftidatatype(T)
-	vol.header.bitpix = niftibitpix(T)
+	vol.header.dim = nidim(vol.raw)
+	vol.header.datatype = nidatatype(T)
+	vol.header.bitpix = nibitpix(T)
 	vol.header.vox_offset = isempty(vol.extensions) ? int32(352) :
 		float32(reduce((v, ex) -> v + esize(ex), SIZEOF_HDR, vol.extensions))
 	vol
 end
 
 # Write the NIfTI header
-writeheader(io::IO, vol::NIfTIVolume) = pack(io, niftiupdate(vol).header)
+writeheader(io::IO, vol::NIVolume) = pack(io, niupdate(vol).header)
 
 # Write a NIfTI file
-function write(io::IO, vol::NIfTIVolume)
+function write(io::IO, vol::NIVolume)
 	writeheader(io, vol)
 	if isempty(vol.extensions)
 		write(io, int32(0))
@@ -300,7 +300,7 @@ function write(io::IO, vol::NIfTIVolume)
 end
 
 # Convenience function to write a NIfTI file given a patch
-function niftiwrite(path::String, vol::NIfTIVolume)
+function niwrite(path::String, vol::NIVolume)
 	io = open(path, "w")
 	write(io, vol)
 	close(io)
@@ -347,7 +347,7 @@ end
 
 # Read a NIfTI file. The optional mmap argument determines whether the contents are read in full
 # (if false) or mmaped from the disk (if true).
-function niftiread(file::String; mmap::Bool=false)
+function niread(file::String; mmap::Bool=false)
 	header_io = open(file, "r")
 	header = read_header(header_io)
 	extensions = read_extensions(header_io, header)
@@ -379,17 +379,17 @@ function niftiread(file::String; mmap::Bool=false)
 		end
 	end
 
-	return NIfTIVolume(header, extensions, volume)
+	return NIVolume(header, extensions, volume)
 end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data
-getindex(f::NIfTIVolume, args...) = getindex(f.raw, args...) * f.header.scl_slope + f.header.scl_inter
-vox(f::NIfTIVolume, args...) =
+getindex(f::NIVolume, args...) = getindex(f.raw, args...) * f.header.scl_slope + f.header.scl_inter
+vox(f::NIVolume, args...) =
 	getindex(f, [isa(args[i], Colon) ? (1:size(f.raw, i)) : args[i] + 1 for i = 1:length(args)]...)
-size(f::NIfTIVolume) = size(f.raw)
-size(f::NIfTIVolume, d) = size(f.raw, d)
-ndims(f::NIfTIVolume) = ndims(f.raw)
-length(f::NIfTIVolume) = length(f.raw)
-endof(f::NIfTIVolume) = endof(f.raw)
+size(f::NIVolume) = size(f.raw)
+size(f::NIVolume, d) = size(f.raw, d)
+ndims(f::NIVolume) = ndims(f.raw)
+length(f::NIVolume) = length(f.raw)
+endof(f::NIVolume) = endof(f.raw)
 
 end

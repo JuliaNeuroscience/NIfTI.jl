@@ -1,6 +1,6 @@
 using NIfTI, Base.Test
 
-file = niftiread("test/example4d.nii")
+file = niread("test/example4d.nii")
 
 # Header
 @test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
@@ -14,7 +14,7 @@ file = niftiread("test/example4d.nii")
 
 # Test writing
 const TEMP_FILE = "/tmp/my.nii"
-vol = NIfTIVolume()
-niftiwrite(TEMP_FILE, vol)
-niftiread(TEMP_FILE)
+vol = NIVolume()
+niwrite(TEMP_FILE, vol)
+niread(TEMP_FILE)
 rm(TEMP_FILE)
