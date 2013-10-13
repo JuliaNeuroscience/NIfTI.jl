@@ -7,7 +7,7 @@ To read a NIfTI file:
 
 ```julia
 using NIfTI
-ni = niftiread("my.nii")
+ni = niread("my.nii")
 ```
 
 The header is in `nii.header`; NIfTI extensions are in `nii.extensions`; the raw
@@ -16,7 +16,7 @@ volume is in `nii.raw`.
 To mmap the NIfTI file:
 
 ```julia
-ni = niftiread("my.nii", true)
+ni = niread("my.nii", mmap=true)
 ```
 
 To get the TR and voxel size:
@@ -35,8 +35,8 @@ Colons works everywhere, even with `vox`
 
 To write a volume:
 ```julia
-niftiwrite("my.nii", ni)
+niwrite("my.nii", ni)
 ```
 
 It is also possible to construct a new volume from scratch; see the
-`NIfTIVolume` constructor in the source for documentation.
+`NIVolume` constructor in the source for documentation.
