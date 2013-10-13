@@ -201,10 +201,10 @@ function main()
 		end
 
 		# Write NIfTI volumes
-		ni = NIfTIVolume(raw; voxel_size=voxel_size,
+		ni = NIVolume(raw; voxel_size=voxel_size,
 			orientation=orientation, dim_info=dim_info,
 			time_step=time_step != false ? time_step.data[1] : 0f0)
-		niftiwrite(joinpath(protocol_dir, "$(series_number).nii"), ni)
+		niwrite(joinpath(protocol_dir, "$(series_number).nii"), ni)
 	end
 end
 
