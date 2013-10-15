@@ -20,7 +20,7 @@ module NIfTI
 
 using StrPack
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
-export NIVolume, niread, niwrite, voxel_size, time_step, vox
+export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
 @struct type NIfTI1Header
     sizeof_hdr::Int32
@@ -81,11 +81,18 @@ type NIfTI1Extension
     edata::Vector{Uint8}
 end
 
-type NIVolume{T<:Number,N}
+type NIVolume{T<:Number,N} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::Array{T,N}
+
+    NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::Array{T,N}) =
+        niupdate(new(header, extensions, raw))
 end
+NIVolume{T<:Number,N}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::Array{T,N}) =
+    NIVolume{T,N}(header, extensions, raw)
+NIVolume{T<:Number,N}(header::NIfTI1Header, raw::Array{T,N}) =
+    NIVolume{T,N}(header, NIfTI1Extension[], raw)
 
 const SIZEOF_HDR = int32(348)
 
@@ -169,6 +176,73 @@ end
 
 # Gets the size of a type in bits
 nibitpix(t::Type) = int16(sizeof(t)*8)
+
+# Convert a NIfTI header to a 4x4 affine transformation matrix
+function getaffine(h::NIfTI1Header)
+    pixdim = float64(h.pixdim)
+    # See documentation at
+    # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/qsform.html
+    if h.sform_code > 0
+        # Method 3
+        return [
+            h.srow_x'
+            h.srow_y'
+            h.srow_z'
+            0 0 0 1
+        ]
+    elseif h.qform_code > 0
+        # Method 2
+        # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/quatern.html
+        b = float32(h.quatern_b)
+        c = float32(h.quatern_c)
+        d = float32(h.quatern_d)
+        a = sqrt(1 - b*b - c*c - d*d)
+        A = [
+            a*a+b*b-c*c-d*d   2*b*c-2*a*d       2*b*d+2*a*c
+            2*b*c+2*a*d       a*a+c*c-b*b-d*d   2*c*d-2*a*b
+            2*b*d-2*a*c       2*c*d+2*a*b       a*a+d*d-c*c-b*b
+        ]
+        B = [
+            pixdim[2]
+            pixdim[3]
+            pixdim[1]*pixdim[4]
+        ]
+        return vcat(hcat(A*B, [
+            h.qoffset_x
+            h.qoffset_y
+            h.qoffset_z
+        ]), [0 0 0 1])
+    elseif h.qform_code == 0
+        # Method 1
+        return float32([
+             pixdim[2] 0         0          0 0
+                       0 pixdim[3]          0 0
+                       0         0  bitpix[4] 0
+                       0         0          0 1
+        ])
+    end
+end
+
+# Set affine matrix of NIfTI header
+function setaffine{T}(h::NIfTI1Header, affine::Array{T,2})
+    size(affine, 1) == size(affine, 2) == 4 ||
+        error("affine matrix must be 4x4")
+    affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
+        error("last row of affine matrix must be [0 0 0 1]")
+    h.qform_code = zero(Int16)
+    h.sform_code = one(Int16)
+    h.pixdim[1] = zero(Float32)
+    h.quatern_b = zero(Float32)
+    h.quatern_c = zero(Float32)
+    h.quatern_d = zero(Float32)
+    h.qoffset_x = zero(Float32)
+    h.qoffset_y = zero(Float32)
+    h.qoffset_z = zero(Float32)
+    h.srow_x = float32(vec(affine[1, :]))
+    h.srow_y = float32(vec(affine[2, :]))
+    h.srow_z = float32(vec(affine[3, :]))
+    h
+end
 
 # Constructor
 function NIVolume{T <: Number}(
@@ -280,11 +354,11 @@ function niupdate{T}(vol::NIVolume{T})
 end
 
 # Write the NIfTI header
-writeheader(io::IO, vol::NIVolume) = pack(io, niupdate(vol).header)
+write(io::IO, header::NIfTI1Header) = pack(io, header)
 
 # Write a NIfTI file
 function write(io::IO, vol::NIVolume)
-    writeheader(io, vol)
+    write(io, niupdate(vol).header)
     if isempty(vol.extensions)
         write(io, int32(0))
     else
@@ -383,7 +457,9 @@ function niread(file::String; mmap::Bool=false)
 end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data
-getindex(f::NIVolume, args...) = getindex(f.raw, args...) * f.header.scl_slope + f.header.scl_inter
+getindex{T}(f::NIVolume{T}, args::Real...) =
+    getindex(f.raw, args...) * (f.header.scl_slope != zero(T) ?
+                                f.header.scl_slope : zero(T)) + f.header.scl_inter
 vox(f::NIVolume, args...) =
     getindex(f, [isa(args[i], Colon) ? (1:size(f.raw, i)) : args[i] + 1 for i = 1:length(args)]...)
 size(f::NIVolume) = size(f.raw)
