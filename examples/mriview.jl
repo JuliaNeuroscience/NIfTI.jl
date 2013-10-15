@@ -18,18 +18,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-using NIfTI, ArgParse, Images, ImageView
+using NIfTI, Tk, Images, ImageView
 
-function mriview(path, xy=["x", "z"], zoom::Int=5)
-    ni = niread(path, mmap=true)
-    scaleminmax
+function mriview(ni::NIVolume, xy=["x", "z"], zoom::Int=5)
     img = Image(ni.raw, ["spatialorder" => ["x", "y", "z"], "timedim" => 4, "colorspace" => "Gray",
                          "pixelspacing"=>voxel_size(ni.header)])
     img = scale(scaleminmax(img), img)
     imgc, imgslice = display(img, xy=xy)
-    tksize = Tk.get_size(toplevel(imgc))
+    tksize = get_size(toplevel(imgc))
     controlheight = tksize[2] - size(img, xy[2])
-    Tk.set_size(toplevel(imgc), max(tksize[1], size(img, xy[1])*zoom),
-                                size(img, xy[2])*zoom+controlheight)
+    set_size(toplevel(imgc), max(tksize[1], size(img, xy[1])*zoom),
+                             size(img, xy[2])*zoom+controlheight)
     (imgc, imgslice)
 end
+mriview(path::String) = mriview(niread(path, mmap=true))
