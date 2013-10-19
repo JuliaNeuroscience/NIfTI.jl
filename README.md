@@ -1,6 +1,8 @@
 NIfTI.jl
 =======
 
+[![Build Status](https://travis-ci.org/simonster/NIfTI.jl.png?branch=master)](https://travis-ci.org/simonster/NIfTI.jl)
+
 ## Usage
 
 To read a NIfTI file:
