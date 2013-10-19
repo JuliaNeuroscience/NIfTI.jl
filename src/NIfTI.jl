@@ -356,6 +356,9 @@ end
 # Write the NIfTI header
 write(io::IO, header::NIfTI1Header) = pack(io, header)
 
+# Avoid method ambiguity
+write(io::Base64Pipe, vol::NIVolume{Uint8,1}) = invoke(write, (IO, NIVolume{Uint8,1}), io, vol)
+
 # Write a NIfTI file
 function write(io::IO, vol::NIVolume)
     write(io, niupdate(vol).header)
@@ -456,8 +459,11 @@ function niread(file::String; mmap::Bool=false)
     return NIVolume(header, extensions, volume)
 end
 
+# Avoid method ambiguity
+getindex{T}(f::NIVolume{T}, x::Real) = invoke(getindex, (typeof(f), Any), f, x)
+getindex{T}(f::NIVolume{T}, x::AbstractArray) = invoke(getindex, (typeof(f), Any), f, x)
 # Allow file to be indexed like an array, but with indices yielding scaled data
-getindex{T}(f::NIVolume{T}, args::Real...) =
+getindex{T}(f::NIVolume{T}, args...) =
     getindex(f.raw, args...) * (f.header.scl_slope != zero(T) ?
                                 f.header.scl_slope : zero(T)) + f.header.scl_inter
 vox(f::NIVolume, args...) =

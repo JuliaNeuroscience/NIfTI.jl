@@ -1,6 +1,6 @@
 using NIfTI, Base.Test
 
-file = niread("test/example4d.nii")
+file = niread(joinpath(dirname(@__FILE__), "example4d.nii"))
 
 # Header
 @test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
@@ -13,7 +13,7 @@ file = niread("test/example4d.nii")
 @test vox(file, 69, 56, 13, :)[:] == [502, 521]
 
 # Test writing
-const TEMP_FILE = "/tmp/my.nii"
+const TEMP_FILE = "$(tempname()).nii"
 vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
