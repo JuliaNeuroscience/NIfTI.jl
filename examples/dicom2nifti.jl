@@ -80,27 +80,25 @@ function main()
         axes = nothing
     else
         axes = uppercase(cmd["axes"])
-        if length(axes) != 3 || contains(axes, 'R') + contains(axes, 'L') != 1 ||
-                contains(axes, 'A') + contains(axes, 'P') != 1 ||
-                contains(axes, 'S') + contains(axes, 'I') != 1
+        if length(axes) != 3 || (!('R' in axes) && !('L' in axes)) ||
+                (!('A' in axes) && !('P' in axes)) ||
+                (!('S' in axes) && !('I' in axes))
             error("Invalid axes provided")
         end
     end
 
-    transform = cmd["sphinx"] ? [-1 0 0; 0 0 1; 0 -1 0] : [-1 0 0; 0 -1 0; 0 0 1]
+    transform = cmd["sphinx"] ? [1 0 0; 0 0 1; 0 -1 0] : [-1 0 0; 0 -1 0; 0 0 1]
 
     # Load all DICOMs into an array, indexed by series number
     dicoms = Dict{Int, Any}()
     walk(cmd["dicomdir"]) do fpath
+        if !ismatch(r".dcm$", fpath)
+            return
+        end
+
         local d
         f = open(fpath, "r")
-        try
-            d = DICOM.dcm_parse(f)
-        catch
-            return
-        finally
-            close(f)
-        end
+        d = DICOM.dcm_parse(f)
 
         series_number_index = findfirst((x) -> x.tag == (0x0020, 0x0011), d)
         if series_number_index == 0
@@ -139,7 +137,7 @@ function main()
 
         # Find Z coordinates of each slice
         image_positions = transform*hcat(
-            [findtag(d, (0x0020, 0x0032), series_number, "Image Position (Patient)")
+            [float32(findtag(d, (0x0020, 0x0032), series_number, "Image Position (Patient)"))
             for d in slices]...)
         z_coords = [dot(image_positions[:, i], orientation[:, 3])
             for i = 1:size(image_positions, 2)]
@@ -168,14 +166,15 @@ function main()
             abs_orientation = abs(orientation)
             for i = 1:3
                 idx = findmax(abs_orientation[i, rg])[2]
-                ras[i] = delete!(rg, idx)
+                ras[i] = splice!(rg, idx)
                 sign[i] = orientation[i, ras[i]] >= 0
             end
 
             # Determine permutation of RAS to user-preferred orientation
-            specified_axes = Int[(contains("RL", c) ? 1 : contains("AP", c) ? 2 : 3)
-                for c in axes]
-            specified_sign = Bool[contains("RAS", c) for c in axes]
+            specified_axes = Int[(c in "RL" ? 1 :
+                                  c in "AP" ? 2 : 3)
+                                 for c in axes]
+            specified_sign = Bool[c in "RAS" for c in axes]
             output_axes = ras[specified_axes]
 
             # Permute
@@ -203,7 +202,7 @@ function main()
         # Write NIfTI volumes
         ni = NIVolume(raw; voxel_size=voxel_size,
             orientation=orientation, dim_info=dim_info,
-            time_step=time_step != false ? time_step.data[1] : 0f0)
+            time_step=time_step != false && !isempty(time_step.data) ? time_step.data[1] : 0f0)
         niwrite(joinpath(protocol_dir, "$(series_number).nii"), ni)
     end
 end
