@@ -349,7 +349,7 @@ function niupdate{T}(vol::NIVolume{T})
     vol.header.datatype = nidatatype(T)
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? int32(352) :
-        float32(reduce((v, ex) -> v + esize(ex), SIZEOF_HDR, vol.extensions))
+        int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR)
     vol
 end
 
