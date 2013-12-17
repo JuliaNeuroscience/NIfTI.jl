@@ -10,6 +10,7 @@ To read a NIfTI file:
 ```julia
 using NIfTI
 ni = niread("my.nii")
+ni = niread("my.nii.gz") # gzipped NIfTI files are detected automatically
 ```
 
 The header is in `nii.header`; NIfTI extensions are in `nii.extensions`; the raw
