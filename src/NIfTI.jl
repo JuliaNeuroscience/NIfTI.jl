@@ -18,7 +18,7 @@
 
 module NIfTI
 
-using StrPack
+using StrPack, GZip
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
@@ -422,36 +422,77 @@ function read_extensions(io::IO, header::NIfTI1Header)
     extensions
 end
 
+# Look for a gzip header in an IOStream
+function isgz(io::IO)
+    ret = read(io, Uint8) == 0x1F && read(io, Uint8) == 0x8B
+    seek(io, 0)
+    ret
+end
+
 # Read a NIfTI file. The optional mmap argument determines whether the contents are read in full
 # (if false) or mmaped from the disk (if true).
 function niread(file::String; mmap::Bool=false)
-    header_io = open(file, "r")
+    file_io = open(file, "r")
+    header_gzipped = isgz(file_io)
+    header_io = header_gzipped ? gzdopen(file_io) : file_io
     header = read_header(header_io)
     extensions = read_extensions(header_io, header)
     dims = tuple(int(header.dim[2:header.dim[1]+1])...)
 
     if !haskey(NIfTI_DT_BITSTYPES, header.datatype)
-        error("Data type $(header.datatype) not yet supported")
+        error("data type $(header.datatype) not yet supported")
     end
     dtype = NIfTI_DT_BITSTYPES[header.datatype]
 
     local volume
     if header.magic == "n+1"
         if mmap
-            volume = mmap_array(dtype, dims, header_io, int(header.vox_offset))
+            if header_gzipped
+                close(header_io)
+                close(file_io)
+                error("cannot mmap a gzipped NIfTI file")
+            else
+                volume = mmap_array(dtype, dims, header_io, int(header.vox_offset))
+            end
         else
             seek(header_io, int(header.vox_offset))
             volume = read(header_io, dtype, dims)
-            @assert eof(header_io)
+            if !eof(header_io)
+                warn("file size does not match length of data; some data may be ignored")
+            end
             close(header_io)
+            !header_gzipped || close(file_io)
         end
-    elseif header.magic == "nil"
+    elseif header.magic == "ni1"
         close(header_io)
-        volume_io = open(replace(file, r"\.\w+$", "")*".img", "r")
+        !header_gzipped || close(file_io)
+
+        volume_name = replace(file, r"\.\w+(\.gz)?$", "")*".img"
+        if !isfile(volume_name)
+            if isfile(volume_name*".gz")
+                volume_name *= ".gz"
+            else
+                error("NIfTI file is dual file storage, but $volume_name does not exist")
+            end
+        end
+
+        volume_io = open(volume_name, "r")
+        volume_gzipped = isgz(volume_io)
         if mmap
-            volume = mmap_array(dtype, dims, volume_io)
+            if volume_gzipped
+                close(volume_io)
+                error("cannot mmap a gzipped NIfTI file")
+            else
+                volume = mmap_array(dtype, dims, volume_io)
+            end
         else
-            volume = read(volume_io, dtype, dims)
+            if volume_gzipped
+                volume_gz_io = gzdopen(volume_io)
+                volume = read(volume_gz_io, dtype, dims)
+                close(volume_gz_io)
+            else
+                volume = read(volume_io, dtype, dims)
+            end
             close(volume_io)
         end
     end
