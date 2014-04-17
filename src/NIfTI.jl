@@ -504,9 +504,16 @@ end
 getindex{T}(f::NIVolume{T}, x::Real) = invoke(getindex, (typeof(f), Any), f, x)
 getindex{T}(f::NIVolume{T}, x::AbstractArray) = invoke(getindex, (typeof(f), Any), f, x)
 # Allow file to be indexed like an array, but with indices yielding scaled data
-getindex{T}(f::NIVolume{T}, args...) =
-    getindex(f.raw, args...) * (f.header.scl_slope != zero(T) ?
-                                f.header.scl_slope : zero(T)) + f.header.scl_inter
+function getindex{T}(f::NIVolume{T}, args...)
+    d = getindex(f.raw, args...)
+    m = f.header.scl_slope
+    b = f.header.scl_inter
+    @inbounds for i = 1:length(d)
+        d[i] = d[i] * m + b
+    end
+    d
+end
+ 
 vox(f::NIVolume, args...) =
     getindex(f, [isa(args[i], Colon) ? (1:size(f.raw, i)) : args[i] + 1 for i = 1:length(args)]...)
 size(f::NIVolume) = size(f.raw)
