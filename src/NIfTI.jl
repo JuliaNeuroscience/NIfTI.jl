@@ -81,21 +81,21 @@ NIVolume{T<:Number,N}(header::NIfTI1Header, raw::Array{T,N}) =
 
 const SIZEOF_HDR = int32(348)
 
-const NIfTI_DT_BITSTYPES = (Int16=>Type)[
-    int16(2) => Uint8,
-    int16(4) => Int16,
-    int16(8) => Int32,
-    int16(16) => Float32,
-    int16(32) => Complex64,
-    int16(64) => Float64,
-    int16(256) => Int8,
-    int16(512) => Uint16, 
-    int16(768) => Uint32,
-    int16(1024) => Int64,
-    int16(1280) => Uint64,
-    int16(1792) => Complex128
-]
-const NIfTI_DT_BITSTYPES_REVERSE = (Type=>Int16)[]
+const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
+    (int16(2), Uint8),
+    (int16(4), Int16),
+    (int16(8), Int32),
+    (int16(16), Float32),
+    (int16(32), Complex64),
+    (int16(64), Float64),
+    (int16(256), Int8),
+    (int16(512), Uint16),
+    (int16(768), Uint32),
+    (int16(1024), Int64),
+    (int16(1280), Uint64),
+    (int16(1792), Complex128)
+])
+const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
 for (k, v) in NIfTI_DT_BITSTYPES
     NIfTI_DT_BITSTYPES_REVERSE[v] = k
 end

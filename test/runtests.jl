@@ -36,8 +36,8 @@ for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
 	@test vox(file, 69, 56, 13, :)[:] == [502, 521]
 end
 
-@test_throws niread(GZIPPED_NII; mmap=true)
-@test_throws niread(GZIPPED_HDR; mmap=true)
+@test_throws ErrorException niread(GZIPPED_NII; mmap=true)
+@test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
 
 # Test writing
 const TEMP_FILE = "$(tempname()).nii"
