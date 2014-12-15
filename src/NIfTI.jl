@@ -361,11 +361,17 @@ function write(io::IO, vol::NIVolume)
     write(io, vol.raw)
 end
 
-# Convenience function to write a NIfTI file given a patch
-function niwrite(path::String, vol::NIVolume)
-    io = open(path, "w")
-    write(io, vol)
-    close(io)
+# Convenience function to write a NIfTI file given a path
+function niwrite(path::String, vol::NIVolume)	
+    if split(path,".")[end] == "gz"
+        iogz = gzopen(path, "w9")
+        write(iogz, vol)
+        close(iogz)
+    else
+        io = open(path, "w")
+        write(io, vol)
+        close(io)
+    end
 end
 
 # Read header from a NIfTI file
