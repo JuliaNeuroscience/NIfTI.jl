@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using StrPack, GZip
+using StrPack, GZip, Compat
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
@@ -317,7 +317,7 @@ orientation::Union(Matrix{Float32}, Nothing)=nothing)
 end
 
 # Calculates the size of a NIfTI extension
-esize(ex::NIfTI1Extension) = 8 + iceil(length(ex.edata)/16)*16
+esize(ex::NIfTI1Extension) = 8 + ceil(Int, length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate{T}(vol::NIVolume{T})
@@ -489,6 +489,7 @@ end
 getindex{T}(f::NIVolume{T}, x::Real) = invoke(getindex, (typeof(f), Any), f, x)
 getindex{T}(f::NIVolume{T}, x::AbstractArray) = invoke(getindex, (typeof(f), Any), f, x)
 # Allow file to be indexed like an array, but with indices yielding scaled data
+getindex{T}(f::NIVolume{T,1}, ::Colon) = f.raw * f.header.scl_slope + f.header.scl_inter
 function getindex{T}(f::NIVolume{T}, args...)
     d = getindex(f.raw, args...)
     m = f.header.scl_slope
