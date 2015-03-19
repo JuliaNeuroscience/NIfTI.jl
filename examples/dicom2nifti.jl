@@ -15,6 +15,9 @@ function parse_commandline()
     s.description = "DICOM to NIfTI converter"
 
     @add_arg_table s begin
+        "--extension"
+            help = "assume files with given extension are DICOM files. Set to blank for no extension."
+            default = ".dcm"
         "--sphinx"
             help = "correct for sphinx position (for monkeys)"
             action = :store_true
@@ -77,7 +80,7 @@ function main()
     # Load all DICOMs into an array, indexed by series number
     dicoms = Dict{Int, Any}()
     walk(cmd["dicomdir"]) do fpath
-        if !ismatch(r".dcm$", fpath)
+        if !endswith(fpath, cmd["extension"])
             return
         end
 
