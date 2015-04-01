@@ -214,7 +214,7 @@ function setaffine{T}(h::NIfTI1Header, affine::Array{T,2})
         error("affine matrix must be 4x4")
     affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
         error("last row of affine matrix must be [0 0 0 1]")
-    h.qform_code = zero(Int16)
+    h.qform_code = one(Int16)
     h.sform_code = one(Int16)
     h.pixdim[1] = zero(Float32)
     h.quatern_b = zero(Float32)
