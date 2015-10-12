@@ -150,7 +150,7 @@ function main()
             # Determine permutation of current volume to RAS
             ras = Array(Int, 3)
             sign = Array(Bool, 3)
-            rg = [1:3]
+            rg = [1:3;]
             abs_orientation = abs(orientation)
             for i = 1:3
                 idx = findmax(abs_orientation[i, rg])[2]
