@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using GZip, Compat
+using GZip
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 

@@ -1,7 +1,7 @@
 # register.jl
 # Register NIfTI volumes based on header information
 
-using NIfTI, Grid, Compat
+using NIfTI, Grid
 
 # Affine matrices that add or subtract one
 # Needed because Julia and Grid.jl assume zero-based indexing
