@@ -74,7 +74,7 @@ function register{T<:FloatingPoint}(targ::NIVolume, mov::NIVolume{T}, outtype::D
     # Set header of mov
     newheader = deepcopy(mov.header)
     setaffine(newheader, targaffine)
-    newheader.pixdim[2:5] = targ.header.pixdim[2:5]
+    newheader.pixdim = (newheader.pixdim[1], targ.header.pixdim[2:4]..., newheader.pixdim[5:end]...)
     NIVolume(newheader, mov.extensions, out)
 end
 register(targ::NIVolume, mov::NIVolume) =
