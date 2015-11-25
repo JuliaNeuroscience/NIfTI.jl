@@ -79,5 +79,5 @@ function register{T<:FloatingPoint}(targ::NIVolume, mov::NIVolume{T}, outtype::D
 end
 register(targ::NIVolume, mov::NIVolume) =
     register(targ, NIVolume(mov.header, mov.extensions, map(Float32, mov.raw)), eltype(mov))
-register(targ::String, mov::String, out::String) =
+register(targ::AbstractString, mov::AbstractString, out::AbstractString) =
     niwrite(out, register(niread(targ, mmap=true), niread(mov, mmap=true)))
