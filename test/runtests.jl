@@ -45,8 +45,15 @@ vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
 
+# Big endian
+const BE = "$(tempname()).nii"
+download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
+img = niread(BE)
+@test size(img) == (91,109,91)
+
 # Clean up
 rm(NII)
 rm(HDR)
 rm(IMG)
 rm(TEMP_FILE)
+rm(BE)
