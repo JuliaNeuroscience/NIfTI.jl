@@ -1,7 +1,7 @@
 NIfTI.jl
 =======
 
-[![Build Status](https://travis-ci.org/simonster/NIfTI.jl.png?branch=master)](https://travis-ci.org/simonster/NIfTI.jl)
+[![Build Status](https://travis-ci.org/JuliaIO/NIfTI.jl.svg?branch=master)](https://travis-ci.org/JuliaIO/NIfTI.jl?branch=master)
 
 ## Usage
 
