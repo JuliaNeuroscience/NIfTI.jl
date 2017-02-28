@@ -102,7 +102,7 @@ end
 const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 
-function string_tuple(x::ByteString, n::Int)
+function string_tuple(x::String, n::Int)
     padding = zeros(UInt8, n-length(x.data))
     (x.data..., padding...)
 end
@@ -118,13 +118,13 @@ type NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     extensions::Vector{NIfTI1Extension}
     raw::R
 
-    NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) =
+    NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) =
         niupdate(new(header, extensions, raw))
 end
 NIVolume{T<:Number,N}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) =
-    NIVolume{T,N,typeof(raw)}(header, extensions, raw)
+    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume{T<:Number,N}(header::NIfTI1Header, raw::AbstractArray{T,N}) =
-    NIVolume{T,N,typeof(raw)}(header, NIfTI1Extension[], raw)
+    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTI1Extension[], raw)
 
 const SIZEOF_HDR = Int32(348)
 
@@ -527,23 +527,13 @@ function niread(file::AbstractString; mmap::Bool=false)
     return NIVolume(header, extensions, volume)
 end
 
-# Avoid method ambiguity
-getindex{T}(f::NIVolume{T}, x::Real) = invoke(getindex, (typeof(f), Any), f, x)
-getindex{T}(f::NIVolume{T}, x::AbstractArray) = invoke(getindex, (typeof(f), Any), f, x)
 # Allow file to be indexed like an array, but with indices yielding scaled data
-getindex{T}(f::NIVolume{T,1}, ::Colon) = f.raw * f.header.scl_slope + f.header.scl_inter
-function getindex{T}(f::NIVolume{T}, args...)
-    d = getindex(f.raw, args...)
-    m = f.header.scl_slope
-    b = f.header.scl_inter
-    @inbounds for i = 1:length(d)
-        d[i] = d[i] * m + b
-    end
-    d
-end
+@inline getindex{T}(f::NIVolume{T}, idx::Vararg{Int}) =
+    getindex(f.raw, idx...) * f.header.scl_slope + f.header.scl_inter
 
-vox(f::NIVolume, args...) =
-    getindex(f, [isa(args[i], Colon) ? (1:size(f.raw, i)) : args[i] + 1 for i = 1:length(args)]...)
+add1{T<:Integer}(x::Union{AbstractArray{T},T}) = x + 1
+add1(::Colon) = Colon()
+@inline vox(f::NIVolume, args...) = getindex(f, map(add1, args)...)
 size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)

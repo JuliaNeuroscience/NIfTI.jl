@@ -34,6 +34,8 @@ for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
 	@test file.raw[65, 49, 13, :][:] == [265, 266]
 	@test vox(file, 64, 48, 12, :)[:] == [265, 266]
 	@test vox(file, 69, 56, 13, :)[:] == [502, 521]
+
+	@assert maximum(file) == maximum(file.raw)
 end
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
