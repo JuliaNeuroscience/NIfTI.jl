@@ -103,8 +103,8 @@ const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 
 function string_tuple(x::String, n::Int)
-    padding = zeros(UInt8, n-length(x.data))
-    (x.data..., padding...)
+    padding = zeros(UInt8, n-length(Vector{UInt8}(x)))
+    (Vector{UInt8}(x)..., padding...)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
