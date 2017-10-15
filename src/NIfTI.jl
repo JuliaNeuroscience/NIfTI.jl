@@ -103,8 +103,8 @@ const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 
 function string_tuple(x::String, n::Int)
-    padding = zeros(UInt8, n-length(x.data))
-    (x.data..., padding...)
+    padding = zeros(UInt8, n-length(Vector{UInt8}(x)))
+    (Vector{UInt8}(x)..., padding...)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
@@ -118,9 +118,10 @@ type NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     extensions::Vector{NIfTI1Extension}
     raw::R
 
-    NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) =
-        niupdate(new(header, extensions, raw))
 end
+NIVolume{R}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+    niupdate(new(header, extensions, raw))
+
 NIVolume{T<:Number,N}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume{T<:Number,N}(header::NIfTI1Header, raw::AbstractArray{T,N}) =
