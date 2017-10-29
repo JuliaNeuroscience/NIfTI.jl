@@ -7,7 +7,7 @@ using MappedArrays
 using GZip
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
-if VERSION >= v"0.7"
+if VERSION > v"0.6.1"
     using Mmap
 end
 
@@ -16,7 +16,7 @@ function define_packed(ty::DataType)
     sz = pop!(packed_offsets)
     unshift!(packed_offsets, 0)
 
-    @eval begin
+    @eMmapval begin
         function Base.read(io::IO, ::Type{$ty})
             bytes = read(io, UInt8, $sz)
             hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...))
