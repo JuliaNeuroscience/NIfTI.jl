@@ -16,14 +16,14 @@ function define_packed(ty::DataType)
     @eval begin
         function Base.read(io::IO, ::Type{$ty})
             bytes = read(io, UInt8, $sz)
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i]))) )for i = 1:length(packed_offsets)]...))
+            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...))
             if hdr.sizeof_hdr == ntoh(Int32(348))
                 return byteswap(hdr), true
             end
             hdr, false
         end
         function Base.write(io::IO, x::$ty)
-            bytes = Array(UInt8, $sz)
+            bytes = Array{UInt8}($sz)
             $([:(unsafe_store!(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])), getfield(x, $i))) for i = 1:length(packed_offsets)]...)
             write(io, bytes)
             $sz
