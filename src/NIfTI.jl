@@ -16,7 +16,7 @@ function define_packed(ty::DataType)
     sz = pop!(packed_offsets)
     unshift!(packed_offsets, 0)
 
-    @eMmapval begin
+    @eval begin
         function Base.read(io::IO, ::Type{$ty})
             bytes = read(io, UInt8, $sz)
             hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...))
