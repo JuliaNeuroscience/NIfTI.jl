@@ -7,6 +7,9 @@ using MappedArrays
 using GZip
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+if VERSION >= v"0.7"
+    using Mmap
+end
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
