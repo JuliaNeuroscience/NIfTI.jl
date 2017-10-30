@@ -7,6 +7,9 @@ using MappedArrays
 using GZip
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+if VERSION > v"0.6.1"
+    using Mmap
+end
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
@@ -16,14 +19,14 @@ function define_packed(ty::DataType)
     @eval begin
         function Base.read(io::IO, ::Type{$ty})
             bytes = read(io, UInt8, $sz)
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i]))) )for i = 1:length(packed_offsets)]...))
+            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...))
             if hdr.sizeof_hdr == ntoh(Int32(348))
                 return byteswap(hdr), true
             end
             hdr, false
         end
         function Base.write(io::IO, x::$ty)
-            bytes = Array(UInt8, $sz)
+            bytes = Array{UInt8}($sz)
             $([:(unsafe_store!(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])), getfield(x, $i))) for i = 1:length(packed_offsets)]...)
             write(io, bytes)
             $sz
@@ -103,8 +106,8 @@ const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 
 function string_tuple(x::String, n::Int)
-    padding = zeros(UInt8, n-length(x.data))
-    (x.data..., padding...)
+    padding = zeros(UInt8, n-length(Vector{UInt8}(x)))
+    (Vector{UInt8}(x)..., padding...)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
@@ -118,9 +121,10 @@ type NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     extensions::Vector{NIfTI1Extension}
     raw::R
 
-    NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) =
-        niupdate(new(header, extensions, raw))
 end
+NIVolume{R}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+    niupdate(new(header, extensions, raw))
+
 NIVolume{T<:Number,N}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume{T<:Number,N}(header::NIfTI1Header, raw::AbstractArray{T,N}) =

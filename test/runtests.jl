@@ -3,7 +3,7 @@ using NIfTI, GZip, Base.Test
 function extractto(gzname, out)
 	open(out, "w") do io
 		gzopen(gzname) do gz
-			write(io, readall(gz))
+			write(io, read(gz))
 		end
 	end
 end
@@ -23,11 +23,11 @@ extractto(joinpath(dirname(@__FILE__), "example4d.img.gz"), IMG)
 
 for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
 	                  (GZIPPED_NII, false), (GZIPPED_HDR, false))
-	file = niread(fname, mmap=mmap)
+	  file = niread(fname, mmap=mmap)
 
 	# Header
 	@test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
-	@test_approx_eq voxel_size(file.header) Float32[2.0, 2.0, 2.2]
+  @test voxel_size(file.header) ≈ Float32[2.0, 2.0, 2.2]
 	@test size(file) == (128, 96, 24, 2)
 
 	# Content
@@ -47,15 +47,16 @@ vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
 
+# Site is currently down TODO: reintroduce this test when site is up
 # Big endian
-const BE = "$(tempname()).nii"
-download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
-img = niread(BE)
-@test size(img) == (91,109,91)
+# const BE = "$(tempname()).nii"
+# download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
+# img = niread(BE)
+# @test size(img) == (91,109,91)
 
 # Clean up
 rm(NII)
 rm(HDR)
 rm(IMG)
 rm(TEMP_FILE)
-rm(BE)
+# rm(BE)
