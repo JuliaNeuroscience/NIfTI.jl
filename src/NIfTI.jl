@@ -3,31 +3,33 @@
 
 module NIfTI
 
-using MappedArrays
-using GZip
+using Compat, MappedArrays, GZip
+
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 if VERSION > v"0.6.1"
-    using Mmap
+    using Compat.Mmap
 end
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
     sz = pop!(packed_offsets)
-    unshift!(packed_offsets, 0)
+    pushfirst!(packed_offsets, 0)
 
     @eval begin
         function Base.read(io::IO, ::Type{$ty})
-            bytes = read(io, UInt8, $sz)
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...))
+            bytes = read!(io, Array{UInt8}(undef, $sz...))
+            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
             if hdr.sizeof_hdr == ntoh(Int32(348))
                 return byteswap(hdr), true
             end
             hdr, false
         end
         function Base.write(io::IO, x::$ty)
-            bytes = Array{UInt8}($sz)
-            $([:(unsafe_store!(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])), getfield(x, $i))) for i = 1:length(packed_offsets)]...)
+            bytes = UInt8[]
+            for name in fieldnames($ty)
+                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
+            end
             write(io, bytes)
             $sz
         end
@@ -35,7 +37,7 @@ function define_packed(ty::DataType)
     nothing
 end
 
-type NIfTI1Header
+mutable struct NIfTI1Header
     sizeof_hdr::Int32
 
     data_type::NTuple{10,UInt8}
@@ -106,28 +108,29 @@ const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 
 function string_tuple(x::String, n::Int)
-    padding = zeros(UInt8, n-length(Vector{UInt8}(x)))
-    (Vector{UInt8}(x)..., padding...)
+    a = codeunits(x)
+    padding = zeros(UInt8, n-length(a))
+    (a..., padding...)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
-type NIfTI1Extension
+mutable struct NIfTI1Extension
     ecode::Int32
     edata::Vector{UInt8}
 end
 
-type NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+mutable struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::R
 
 end
-NIVolume{R}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
     niupdate(new(header, extensions, raw))
 
-NIVolume{T<:Number,N}(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) =
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
-NIVolume{T<:Number,N}(header::NIfTI1Header, raw::AbstractArray{T,N}) =
+NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTI1Extension[], raw)
 
 const SIZEOF_HDR = Int32(348)
@@ -137,14 +140,14 @@ const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
     (Int16(4), Int16),
     (Int16(8), Int32),
     (Int16(16), Float32),
-    (Int16(32), Complex64),
+    (Int16(32), ComplexF32),
     (Int16(64), Float64),
     (Int16(256), Int8),
     (Int16(512), UInt16),
     (Int16(768), UInt32),
     (Int16(1024), Int64),
     (Int16(1280), UInt64),
-    (Int16(1792), Complex128)
+    (Int16(1792), ComplexF64)
 ])
 const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
 for (k, v) in NIfTI_DT_BITSTYPES
@@ -190,7 +193,7 @@ end
 # Returns or sets dim_info as a tuple whose values are the frequency, phase, and slice dimensions
 dim_info(header::NIfTI1Header) = (header.dim_info & int8(3), (header.dim_info >> 2) & int8(3),
     (header.dim_info >> 4) & int8(3))
-dim_info{T<:Integer}(header::NIfTI1Header, dim_info::Tuple{T, T, T}) =
+dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer} =
     header.dim_info = to_dim_info(dim_info)
 
 # Gets dim to be used in header
@@ -198,7 +201,7 @@ function nidim(x::AbstractArray)
     dim = ones(Int16, 8)
     dim[1] = ndims(x)
     dim[2:dim[1]+1] = [size(x)...]
-    (dim...)
+    (dim...,)
 end
 
 # Gets datatype to be used in header
@@ -260,31 +263,31 @@ function getaffine(h::NIfTI1Header)
 end
 
 # Set affine matrix of NIfTI header
-function setaffine{T}(h::NIfTI1Header, affine::Array{T,2})
+function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
     size(affine, 1) == size(affine, 2) == 4 ||
         error("affine matrix must be 4x4")
     affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
         error("last row of affine matrix must be [0 0 0 1]")
     h.qform_code = one(Int16)
     h.sform_code = one(Int16)
-    h.pixdim = (zero(Float32), h.pixdim[2:end]...)
+    h.pixdim = (zero(Float32), h.pixdim[2:end]...,)
     h.quatern_b = zero(Float32)
     h.quatern_c = zero(Float32)
     h.quatern_d = zero(Float32)
     h.qoffset_x = zero(Float32)
     h.qoffset_y = zero(Float32)
     h.qoffset_z = zero(Float32)
-    h.srow_x = convert(Tuple{Vararg{Float32}}, (affine[1, :]...))
-    h.srow_y = convert(Tuple{Vararg{Float32}}, (affine[2, :]...))
-    h.srow_z = convert(Tuple{Vararg{Float32}}, (affine[3, :]...))
+    h.srow_x = convert(Tuple{Vararg{Float32}}, (affine[1, :]...,))
+    h.srow_y = convert(Tuple{Vararg{Float32}}, (affine[2, :]...,))
+    h.srow_z = convert(Tuple{Vararg{Float32}}, (affine[3, :]...,))
     h
 end
 
 # Constructor
-function NIVolume{T <: Number}(
+function NIVolume(
 # Optional MRI volume; if not given, an empty volume is used
 raw::AbstractArray{T}=Int16[],
-extensions::Union{Vector{NIfTI1Extension},Void}=nothing;
+extensions::Union{Vector{NIfTI1Extension},Nothing}=nothing;
 
 # Fields specified as UNUSED in NIfTI1 spec
 data_type::AbstractString="", db_name::AbstractString="", extents::Integer=Int32(0),
@@ -321,7 +324,7 @@ aux_file::AbstractString="",
 qfac::Float32=0f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
 qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
 # Orientation matrix for Method 3
-orientation::Union{Matrix{Float32},Void}=nothing)
+orientation::Union{Matrix{Float32},Nothing}=nothing) where {T <: Number}
     local t
     if isempty(raw)
         raw = Int16[]
@@ -363,15 +366,15 @@ orientation::Union{Matrix{Float32},Void}=nothing)
         xyzt_units, cal_max, cal_min, slice_duration,
         toffset, glmax, glmin, string_tuple(descrip, 80), string_tuple(aux_file, 24), (method2 || method3),
         method3, quatern_b, quatern_c, quatern_d,
-        qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...),
-        (orientation[2, :]...), (orientation[3, :]...), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
+        qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
+        (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
 end
 
 # Calculates the size of a NIfTI extension
 esize(ex::NIfTI1Extension) = 8 + ceil(Int, length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
-function niupdate{T}(vol::NIVolume{T})
+function niupdate(vol::NIVolume{T}) where {T}
     vol.header.sizeof_hdr = SIZEOF_HDR
     vol.header.dim = nidim(vol.raw)
     vol.header.datatype = nidatatype(T)
@@ -382,7 +385,7 @@ function niupdate{T}(vol::NIVolume{T})
 end
 
 # Avoid method ambiguity
-write(io::Base.Base64.Base64EncodePipe, vol::NIVolume{UInt8,1}) = invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
+write(io::Compat.Base64.Base64EncodePipe, vol::NIVolume{UInt8,1}) = invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
 
 # Write a NIfTI file
 function write(io::IO, vol::NIVolume)
@@ -429,7 +432,7 @@ function read_extensions(io::IO, header::NIfTI1Header)
         return NIfTI1Extension[]
     end
 
-    extension = read(io, UInt8, 4)
+    extension = read!(io, Array{UInt8}(undef, 4))
     if extension[1] != 1
         return NIfTI1Extension[]
     end
@@ -445,7 +448,7 @@ function read_extensions(io::IO, header::NIfTI1Header)
             ecode = bswap(ecode)
         end
 
-        push!(extensions, NIfTI1Extension(ecode, read(io, UInt8, esize-8)))
+        push!(extensions, NIfTI1Extension(ecode, read!(io, Array{UInt8}(undef, esize-8))))
     end
     extensions
 end
@@ -484,7 +487,7 @@ function niread(file::AbstractString; mmap::Bool=false)
             end
         else
             seek(header_io, Int(header.vox_offset))
-            volume = read(header_io, dtype, dims)
+            volume = read!(header_io, Array{dtype}(undef, dims))
             if !eof(header_io)
                 warn("file size does not match length of data; some data may be ignored")
             end
@@ -495,7 +498,7 @@ function niread(file::AbstractString; mmap::Bool=false)
         close(header_io)
         !header_gzipped || close(file_io)
 
-        volume_name = replace(file, r"\.\w+(\.gz)?$", "")*".img"
+        volume_name = replace(file, r"\.\w+(\.gz)?$" => "")*".img"
         if !isfile(volume_name)
             if isfile(volume_name*".gz")
                 volume_name *= ".gz"
@@ -516,10 +519,10 @@ function niread(file::AbstractString; mmap::Bool=false)
         else
             if volume_gzipped
                 volume_gz_io = gzdopen(volume_io)
-                volume = read(volume_gz_io, dtype, dims)
+                volume = read!(volume_gz_io, Array{dtype}(undef, dims))
                 close(volume_gz_io)
             else
-                volume = read(volume_io, dtype, dims)
+                volume = read!(volume_io, Array{dtype}(undef, dims))
             end
             close(volume_io)
         end
@@ -532,12 +535,12 @@ function niread(file::AbstractString; mmap::Bool=false)
 end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data
-@inline getindex{T}(f::NIVolume{T}, idx::Vararg{Int}) =
-    getindex(f.raw, idx...) * f.header.scl_slope + f.header.scl_inter
+@inline getindex(f::NIVolume{T}, idx::Vararg{Int}) where {T} =
+    getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
 
-add1{T<:Integer}(x::Union{AbstractArray{T},T}) = x + 1
+add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
-@inline vox(f::NIVolume, args...) = getindex(f, map(add1, args)...)
+@inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
 size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
