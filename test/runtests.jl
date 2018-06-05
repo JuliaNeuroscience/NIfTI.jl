@@ -1,6 +1,4 @@
 using Compat
-pushfirst!(LOAD_PATH, joinpath(dirname(@__FILE__), "../src"))
-pushfirst!(LOAD_PATH, joinpath(dirname(@__FILE__), "../src"))
 using NIfTI, GZip, Compat.Test
 
 function extractto(gzname, out)
