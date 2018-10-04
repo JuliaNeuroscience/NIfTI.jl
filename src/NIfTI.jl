@@ -3,13 +3,10 @@
 
 module NIfTI
 
-using Compat, MappedArrays, GZip
+using MappedArrays, GZip, Mmap
 
-import Base.getindex, Base.size, Base.ndims, Base.length, Base.endof, Base.write
+import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
-if VERSION > v"0.6.1"
-    using Compat.Mmap
-end
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
@@ -92,8 +89,10 @@ mutable struct NIfTI1Header
 end
 define_packed(NIfTI1Header)
 
+# byteswapping
+
 function byteswap(hdr::NIfTI1Header)
-    for fn in fieldnames(hdr)
+    for fn in fieldnames(typeof(hdr))
         val = getfield(hdr, fn)
         if isa(val, Number) && sizeof(val) > 1
             setfield!(hdr, fn, ntoh(val))
@@ -102,6 +101,27 @@ function byteswap(hdr::NIfTI1Header)
         end
     end
     hdr
+end
+
+const SIZEOF_HDR = Int32(348)
+
+const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
+    (Int16(2), UInt8),
+    (Int16(4), Int16),
+    (Int16(8), Int32),
+    (Int16(16), Float32),
+    (Int16(32), ComplexF32),
+    (Int16(64), Float64),
+    (Int16(256), Int8),
+    (Int16(512), UInt16),
+    (Int16(768), UInt32),
+    (Int16(1024), Int64),
+    (Int16(1280), UInt64),
+    (Int16(1792), ComplexF64)
+])
+const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
+for (k, v) in NIfTI_DT_BITSTYPES
+    NIfTI_DT_BITSTYPES_REVERSE[v] = k
 end
 
 const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
@@ -132,27 +152,6 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::Abstrac
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTI1Extension[], raw)
-
-const SIZEOF_HDR = Int32(348)
-
-const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
-    (Int16(2), UInt8),
-    (Int16(4), Int16),
-    (Int16(8), Int32),
-    (Int16(16), Float32),
-    (Int16(32), ComplexF32),
-    (Int16(64), Float64),
-    (Int16(256), Int8),
-    (Int16(512), UInt16),
-    (Int16(768), UInt32),
-    (Int16(1024), Int64),
-    (Int16(1280), UInt64),
-    (Int16(1792), ComplexF64)
-])
-const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
-for (k, v) in NIfTI_DT_BITSTYPES
-    NIfTI_DT_BITSTYPES_REVERSE[v] = k
-end
 
 # Conversion factors to mm/ms
 # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
@@ -285,46 +284,46 @@ end
 
 # Constructor
 function NIVolume(
-# Optional MRI volume; if not given, an empty volume is used
-raw::AbstractArray{T}=Int16[],
-extensions::Union{Vector{NIfTI1Extension},Nothing}=nothing;
+    # Optional MRI volume; if not given, an empty volume is used
+    raw::AbstractArray{T}=Int16[],
+    extensions::Union{Vector{NIfTI1Extension},Nothing}=nothing;
 
-# Fields specified as UNUSED in NIfTI1 spec
-data_type::AbstractString="", db_name::AbstractString="", extents::Integer=Int32(0),
-session_error::Integer=Int16(0), regular::Integer=Int8(0), glmax::Integer=Int32(0),
-glmin::Integer=Int16(0),
+    # Fields specified as UNUSED in NIfTI1 spec
+    data_type::AbstractString="", db_name::AbstractString="", extents::Integer=Int32(0),
+    session_error::Integer=Int16(0), regular::Integer=Int8(0), glmax::Integer=Int32(0),
+    glmin::Integer=Int16(0),
 
-# The frequency encoding, phase encoding and slice dimensions.
-dim_info::NTuple{3, Integer}=(0, 0, 0),
-# Describes data contained in the file; for valid values, see
-# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/group__NIfTI1__INTENT__CODES.html
-intent_p1::Real=0f0, intent_p2::Real=0f0, intent_p3::Real=0f0,
-intent_code::Integer=Int16(0), intent_name::AbstractString="",
-# Information about which slices were acquired, in case the volume has been padded
-slice_start::Integer=Int16(0), slice_end::Integer=Int16(0), slice_code::Int8=Int8(0),
-# The size of each voxel and the time step. These are formulated in mm unless xyzt_units is
-# explicitly specified
-voxel_size::NTuple{3, Real}=(1f0, 1f0, 1f0), time_step::Real=0f0, xyzt_units::Int8=Int8(18),
-# Slope and intercept by which volume shoudl be scaled
-scl_slope::Real=1f0, scl_inter::Real=0f0,
-# These describe how data should be scaled when displayed on the screen. They are probably
-# rarely used
-cal_max::Real=0f0, cal_min::Real=0f0,
-# The amount of time taken to acquire a slice
-slice_duration::Real=0f0,
-# Indicates a non-zero start point for time axis
-toffset::Real=0f0,
+    # The frequency encoding, phase encoding and slice dimensions.
+    dim_info::NTuple{3, Integer}=(0, 0, 0),
+    # Describes data contained in the file; for valid values, see
+    # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/group__NIfTI1__INTENT__CODES.html
+    intent_p1::Real=0f0, intent_p2::Real=0f0, intent_p3::Real=0f0,
+    intent_code::Integer=Int16(0), intent_name::AbstractString="",
+    # Information about which slices were acquired, in case the volume has been padded
+    slice_start::Integer=Int16(0), slice_end::Integer=Int16(0), slice_code::Int8=Int8(0),
+    # The size of each voxel and the time step. These are formulated in mm unless xyzt_units is
+    # explicitly specified
+    voxel_size::NTuple{3, Real}=(1f0, 1f0, 1f0), time_step::Real=0f0, xyzt_units::Int8=Int8(18),
+    # Slope and intercept by which volume shoudl be scaled
+    scl_slope::Real=1f0, scl_inter::Real=0f0,
+    # These describe how data should be scaled when displayed on the screen. They are probably
+    # rarely used
+    cal_max::Real=0f0, cal_min::Real=0f0,
+    # The amount of time taken to acquire a slice
+    slice_duration::Real=0f0,
+    # Indicates a non-zero start point for time axis
+    toffset::Real=0f0,
 
-# "Any text you like"
-descrip::AbstractString="",
-# Name of auxiliary file
-aux_file::AbstractString="",
+    # "Any text you like"
+    descrip::AbstractString="",
+    # Name of auxiliary file
+    aux_file::AbstractString="",
 
-# Parameters for Method 2. See the NIfTI spec
-qfac::Float32=0f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
-qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
-# Orientation matrix for Method 3
-orientation::Union{Matrix{Float32},Nothing}=nothing) where {T <: Number}
+    # Parameters for Method 2. See the NIfTI spec
+    qfac::Float32=0f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
+    qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
+    # Orientation matrix for Method 3
+    orientation::Union{Matrix{Float32},Nothing}=nothing) where {T <: Number}
     local t
     if isempty(raw)
         raw = Int16[]
@@ -385,7 +384,7 @@ function niupdate(vol::NIVolume{T}) where {T}
 end
 
 # Avoid method ambiguity
-write(io::Compat.Base64.Base64EncodePipe, vol::NIVolume{UInt8,1}) = invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
+write(io::Base64.Base64EncodePipe, vol::NIVolume{UInt8,1}) = invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
 
 # Write a NIfTI file
 function write(io::IO, vol::NIVolume)
@@ -462,6 +461,9 @@ end
 
 # Read a NIfTI file. The optional mmap argument determines whether the contents are read in full
 # (if false) or mmaped from the disk (if true).
+"""
+
+"""
 function niread(file::AbstractString; mmap::Bool=false)
     file_io = open(file, "r")
     header_gzipped = isgz(file_io)
@@ -545,6 +547,6 @@ size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
 length(f::NIVolume) = length(f.raw)
-endof(f::NIVolume) = endof(f.raw)
+lastindex(f::NIVolume) = lastindex(f.raw)
 
 end

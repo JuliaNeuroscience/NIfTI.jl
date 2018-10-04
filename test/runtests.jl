@@ -1,5 +1,5 @@
-using Compat
-using NIfTI, GZip, Compat.Test
+using NIfTI, GZip
+using Test
 
 function extractto(gzname, out)
 	open(out, "w") do io
