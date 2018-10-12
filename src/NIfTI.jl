@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using MappedArrays, GZip, Mmap
+using GZip, Mmap
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
