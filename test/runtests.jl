@@ -1,4 +1,5 @@
-using NIfTI, GZip, Base.Test
+using NIfTI, GZip
+using Test
 
 function extractto(gzname, out)
 	open(out, "w") do io
@@ -9,17 +10,17 @@ function extractto(gzname, out)
 end
 
 # single file storage
-const GZIPPED_NII = joinpath(dirname(@__FILE__), "example4d.nii.gz")
+const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")
 const NII = "$(tempname()).nii"
 extractto(GZIPPED_NII, NII)
 
 # dual file storage
-const GZIPPED_HDR = joinpath(dirname(@__FILE__), "example4d.hdr.gz")
+const GZIPPED_HDR = joinpath(dirname(@__FILE__), "data/example4d.hdr.gz")
 hdr_stem = tempname()
 const HDR = "$hdr_stem.hdr"
 const IMG = "$hdr_stem.img"
 extractto(GZIPPED_HDR, HDR)
-extractto(joinpath(dirname(@__FILE__), "example4d.img.gz"), IMG)
+extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
 for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
 	                  (GZIPPED_NII, false), (GZIPPED_HDR, false))
@@ -51,8 +52,8 @@ niread(TEMP_FILE)
 # Big endian
 # const BE = "$(tempname()).nii"
 # download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
-# img = niread(BE)
-# @test size(img) == (91,109,91)
+img = niread("data/avg152T1_LR_nifti.nii.gz")
+@test size(img) == (91,109,91)
 
 # Clean up
 rm(NII)
