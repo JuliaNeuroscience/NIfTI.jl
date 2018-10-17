@@ -43,3 +43,16 @@ niwrite("my.nii", ni)
 
 It is also possible to construct a new volume from scratch; see the
 `NIVolume` constructor in the source for documentation.
+
+## Todo
+
+* [ ] Create (reasonably) comprehensive dictionatires for interpreting NIfTI fields
+* [ ] Interacting with headers/extensions
+* [ ] Add NIfTI-2 support
+* [ ] ImageMeta integration
+* [ ] IO routines
+    * header magic for fileio
+    * [ ] NIfTI-1/2
+    * [ ] Analyze
+    * Gifti?
+    * Cifti?
