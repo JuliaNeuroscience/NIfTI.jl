@@ -15,6 +15,7 @@ const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
     (Int16(1280), UInt64),
     (Int16(1792), ComplexF64)
 ])
+
 const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
 for (k, v) in NIfTI_DT_BITSTYPES
     NIfTI_DT_BITSTYPES_REVERSE[v] = k
@@ -23,6 +24,19 @@ end
 const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
 const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 const NP2_MAGIC = (0x6e,0x2b,0x32,0x00, 0x0d, 0x0a,0x1a,0x0a)
+
+const NIFTI_UNITS = Dict([
+    (Int16(0), nothing),
+    (Int16(1), u"m"),  # meter
+    (Int16(2), u"mm"),  # millimeters
+    (Int16(3), u"μm"),  # microns
+    (Int16(8), u"s"),  # second
+    (Int16(16), u"ms"),  # milliseconds
+    (Int16(24), u"μs"), # microseconds
+    (Int16(32), u"Hz"),  # hertz
+    (Int16(40), u"ppm"),  # parts per million
+    (Int16(48), u"rad/s")  # radians per second
+])
 
 const ANALYZE75_ORIENT = Dict{Symbol,Int16}([
     (:a75_transverse_unflipped, 0),
@@ -62,7 +76,6 @@ const NIFTI_FTYPE = Dict{NTuple{4,UInt8}
     (Int16(4), :NIfTI2_1),
     (Int16(5), :NIfTI2_2)
 ])
-
 
 # Conversion factors to mm/ms
 # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
@@ -104,20 +117,11 @@ const NIFTI_INTENT = Dict{Int16,Symbol}([
     (Int16(21), :extval),
     (Int16(22), :pval),
     (Int16(23), :logpval),
-    # To be safe, a program should compute p = pow(10.,-abs(this_value)).
-    # The nifti_stats.c library returns this_value
-    # as positive, so that this_value = -log10(p).
     (Int16(24), :log10pval),
-    # To signify that the value at each voxel is an estimate
-    # of some parameter, set intent_code = NIFTI_INTENT_ESTIMATE.
-    # The name of the parameter may be stored in intent_name.
+
+    # not stats codes
     (Int16(1001), :estimate),
-    # To signify that the value at each voxel is an index into
-    # some set of labels, set intent_code = NIFTI_INTENT_LABEL.
-    # The filename with the labels may stored in aux_file.
     (Int16(1002), :label),
-    # To signify that the value at each voxel is an index into the
-    # NeuroNames labels set, set intent_code = NIFTI_INTENT_NEURONAME.
     (Int16(1003), :neuroname),
     (Int16(1004), :genmatrix),
     (Int16(1005), :symmatrix),
@@ -142,7 +146,7 @@ const NIFTI_XFORM = Dict{Int16,Symbol}([
     (Int16(2), :aligned_anat),
     (Int16(3), :talairach),
     (Int16(4), :mni152)
-   ])
+])
 
 const NIFTI_ECODE = Dict{Int16, Symbol}([
     (Int16(0), :ignore),
