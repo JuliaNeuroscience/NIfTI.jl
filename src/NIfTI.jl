@@ -1,6 +1,6 @@
 module NIfTI
 
-using GZip, Mmap
+using GZip, Mmap, ImageMetadata, Unitful
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 
 include("dictionaries.jl")
