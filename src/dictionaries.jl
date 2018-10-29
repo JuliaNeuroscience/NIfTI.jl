@@ -34,7 +34,7 @@ const NIFTI_UNITS = Dict([
     (Int16(16), u"ms"),  # milliseconds
     (Int16(24), u"μs"), # microseconds
     (Int16(32), u"Hz"),  # hertz
-    (Int16(40), u"ppm"),  # parts per million
+    # (Int16(40), u"ppm"),  # parts per million TODO
     (Int16(48), u"rad/s")  # radians per second
 ])
 
@@ -67,77 +67,13 @@ const NIFTI_SLICE = Dict{Int16, Symbol}([
     (Int16(6), :alt_dec2)
    ])
 
-const NIFTI_FTYPE = Dict{NTuple{4,UInt8}
-, Symbol}([
+const NIFTI_FTYPE = Dict{Int16, Symbol}([
     (Int16(0), :Analyze),
     (Int16(1), :NIfTI1_1),
     (Int16(2), :NIfTI1_2),
     (Int16(3), :ASCII),
     (Int16(4), :NIfTI2_1),
     (Int16(5), :NIfTI2_2)
-])
-
-# Conversion factors to mm/ms
-# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
-const SPATIAL_UNIT_MULTIPLIERS = [
-    1000,   # 1 => NIfTI_UNITS_METER
-    1,      # 2 => NIfTI_UNITS_MM
-    0.001   # 3 => NIfTI_UNITS_MICRON
-]
-const TIME_UNIT_MULTIPLIERS = [
-    1000,   # NIfTI_UNITS_SEC
-    1,      # NIfTI_UNITS_MSEC
-    0.001,  # NIfTI_UNITS_USEC
-    1,      # NIfTI_UNITS_HZ
-    1,      # NIfTI_UNITS_PPM
-    1       # NIfTI_UNITS_RADS
-   ]
-
-const NIFTI_INTENT = Dict{Int16,Symbol}([
-    (Int16(0), :none),
-    (Int16(2), :correl),
-    (Int16(3), :ttest),
-    (Int16(4), :ftest),
-    (Int16(5), :zscore),
-    (Int16(6), :chisq),
-    (Int16(7), :beta),
-    (Int16(8), :binom),
-    (Int16(9), :gamma),
-    (Int16(10), :poisson),
-    (Int16(11), :normal),
-    (Int16(12), :ftest_nonc),
-    (Int16(13), :chisq_nonc),
-    (Int16(14), :logistic),
-    (Int16(15), :laplace),
-    (Int16(16), :uniform),
-    (Int16(17), :ttest_nonc),
-    (Int16(18), :weibull),
-    (Int16(19), :chi),
-    (Int16(20), :invgauss),
-    (Int16(21), :extval),
-    (Int16(22), :pval),
-    (Int16(23), :logpval),
-    (Int16(24), :log10pval),
-
-    # not stats codes
-    (Int16(1001), :estimate),
-    (Int16(1002), :label),
-    (Int16(1003), :neuroname),
-    (Int16(1004), :genmatrix),
-    (Int16(1005), :symmatrix),
-    (Int16(1006), :dispvect),
-    (Int16(1007), :vector),
-    (Int16(1008), :pointset),
-    (Int16(1009), :triangle),
-    (Int16(1010), :quaternion),
-    (Int16(1011), :dimless),
-
-    # gifti datasets
-    (Int16(2001), :time_series),
-    (Int16(2002), :node_index),
-    (Int16(2003), :rgb_vector),
-    (Int16(2004), :rgba_vector),
-    (Int16(2005), :shape)
 ])
 
 const NIFTI_XFORM = Dict{Int16,Symbol}([
@@ -147,6 +83,62 @@ const NIFTI_XFORM = Dict{Int16,Symbol}([
     (Int16(3), :talairach),
     (Int16(4), :mni152)
 ])
+
+const NIFTI_INTENT = Dict{Int16, String}(
+    # spm intent
+    0    => "NiftiImage",
+    2    => "Correlation",
+    3    => "TTest",
+    4    => "FTest",
+    5    => "ZScore",
+    6    => "Chisq",
+    7    => "Beta",
+    8    => "Binomial",
+    9    => "Gamma",
+    10   => "Poisson",
+    11   => "Normal",
+    12   => "NoncentralFTest",
+    13   => "NoncentralChisq",
+    14   => "Logistic",
+    15   => "Laplace",
+    16   => "Uniform",
+    17   => "NoncentralTTest",
+    18   => "Weibull",
+    19   => "Chi",
+    20   => "InverseGaussian",
+    21   => "ExtremeValue",
+    22   => "Pvalue",
+    23   => "logPvalue",
+    24   => "log₁₀Pvalue",
+    1001 => "Estimate",
+
+    # LabelImages
+    1002 => "Label",
+    1003 => "NeuroName",
+
+    # VectorImages
+    1004 => "GeneralMatrix",
+    1005 => "SymmetricMatrix",
+    1006 => "DisplacementVector",
+    1007 => "GeneralVector",
+    1008 => "PointSet",
+    1009 => "TriangleSet",
+
+    1010 => "Quaternion",
+    1011 => "Dimensionless",
+
+    # Gifti intent
+    2001 => "TimeSeries",
+    2002 => "NodeIndex",
+    2003 => "RGBVector",
+    2004 => "RGBAVector",
+    2005 => "Shape"
+)
+
+const NIFTI_INTENT_REVERSE = Dict{String,Int16}()
+for (k, v) in NIFTI_INTENT
+    NIFTI_INTENT_REVERSE[v] = k
+end
 
 const NIFTI_ECODE = Dict{Int16, Symbol}([
     (Int16(0), :ignore),
@@ -170,4 +162,3 @@ const NIFTI_ECODE = Dict{Int16, Symbol}([
     (Int16(38), :eval),
     (Int16(40), :matlab)
 ])
-

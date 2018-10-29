@@ -3,6 +3,16 @@ NIfTI.jl
 
 [![Build Status](https://travis-ci.org/JuliaIO/NIfTI.jl.svg?branch=master)](https://travis-ci.org/JuliaIO/NIfTI.jl?branch=master)
 
+## I/O routines
+
+1. `load` uses FileIO query to appropriately detect file extension  constructs `NiftiReader` for NIfTI, Analyze, etc. file types
+2. `NiftiReader` fetches a `NiftiHeader` type for specific I/O routines:
+    - NIfTI Header: NIfTI header only
+    - NIfTI Extension: NIfTI extension only
+    - NIfTI Volume: raw NIfTI volume only
+    - Image: header + extension + volume &rarr; `ImageMeta` type
+3. `save` checks for and acquires appropriate information from `ImageMeta` to construct a NIfTI file
+
 ## Usage
 
 To read a NIfTI file:
@@ -44,15 +54,22 @@ niwrite("my.nii", ni)
 It is also possible to construct a new volume from scratch; see the
 `NIVolume` constructor in the source for documentation.
 
+## Image Intent
+
 ## Todo
 
 * [ ] Create (reasonably) comprehensive dictionatires for interpreting NIfTI fields
 * [ ] Interacting with headers/extensions
 * [ ] Add NIfTI-2 support
-* [ ] ImageMeta integration
+* [ ] Support NIfTI intent types
+    * [ ] Most common cases probably just use plain ImageMeta
+    * [ ] Statistical parametric mapping
+    * [ ] Vector images (probably can just use ImageMeta with properly labeled AxisArrays)
+    * [ ] Pointset, triangle, etc. may need to have specific mesh format
+    * [ ] Quaternion may need own format (or just convert to array)
 * [ ] IO routines
-    * header magic for fileio
+    * [ ] header magic for fileio
     * [ ] NIfTI-1/2
     * [ ] Analyze
-    * Gifti?
-    * Cifti?
+    * [ ] Gifti?
+    * [ ] Cifti?

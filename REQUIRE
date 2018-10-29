@@ -1,2 +1,5 @@
 julia 0.7
 GZip
+Distributions
+Unitful
+FileIO
