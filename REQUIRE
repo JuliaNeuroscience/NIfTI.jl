@@ -1,5 +1,7 @@
 julia 0.7
 GZip
+ImageMetadata
+ImageAxes
 Distributions
 Unitful
 FileIO

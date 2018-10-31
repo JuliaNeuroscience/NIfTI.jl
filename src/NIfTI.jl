@@ -1,7 +1,7 @@
 module NIfTI
 
 # using GeometryTypes
-using GZip, Mmap, ImageMetadata, Unitful, FileIO, Distributions
+using GZip, Mmap, ImageMetadata, ImageAxes, Unitful, FileIO, Distributions, LinearAlgebra
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 
 include("dictionaries.jl")
@@ -12,9 +12,15 @@ include("imagevector.jl")
 include("imagestats.jl")
 include("imagelabel.jl")
 include("gifti.jl")
+include("imageintent.jl")
 include("image.jl")
 include("io.jl")
 
-#export load, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+export NiftiHeader,
+       sdims,
+       pixelspacing,
+       nimages,
+       timedim
+       getaffine
 
 end

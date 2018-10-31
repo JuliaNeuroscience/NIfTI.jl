@@ -18,7 +18,7 @@ function define_packed(ty::DataType)
         function Base.write(io::IO, x::$ty)
             bytes = UInt8[]
             for name in fieldnames($ty)
-                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
+                append!(bytes, reinterpret(UInt8, [getfield(x, name)]))
             end
             write(io, bytes)
             $sz
@@ -140,17 +140,17 @@ end
 # - nimages
 # - timedim
 
-sdim(hdr::NiftiHeader) = min(hdr.dim[1], 3)
+sdims(hdr::NiftiHeader) = min(hdr.dim[1], 3)
 
 function pixelspacing(hdr::NiftiHeader, standardize::Bool=false)
-    [hdr.pixdim[i] * NIFTI_UNITS[hdr.xyzt_units & 0x07] for i = 2:sdim(hdr)+1]
+    [hdr.pixdim[i] * NIFTI_UNITS[hdr.xyzt_units & 0x07] for i = 2:sdims(hdr)+1]
 end
 
 nimages(hdr::NiftiHeader) = hdr.dim[1] < 5 ? 0 : hdr.dim[5]
 
 function timedim(hdr::NiftiHeader)
     uu = NIFTI_UNITS[hdr.xyzt_units & 0x38]
-    range(0.7, step=hdr.pixdim[5], length=hdr.dim[5]) * uu
+    range(hdr.toffset, step=hdr.pixdim[5], length=hdr.dim[5]) * uu
 end
 
 """
@@ -192,9 +192,23 @@ function getdatatype(hdr::NiftiHeader)
     t
 end
 
+function getaffine(hdr::NiftiHeader)
+    t = eltype(hdr.quatern_c)
+    qfac = (hdr.pixdim[1] < t(0.0)) ? t(-1.0) : t(1.0)
+    getaffine(hdr.qform_code, hdr.sform_code,
+              hdr.srow_x, hdr.srow_y, hdr.srow_z,
+              hdr.quatern_b, hdr.quatern_c,
+              hdr.quatern_d, hdr.qoffset_x,
+              hdr.qoffset_y, hdr.qoffset_z,
+              hdr.pixdim[2], hdr.pixdim[3],
+              hdr.pixdim[4], qfac)
+end
+
+getdescription(hdr::NiftiHeader) = String([hdr.descrip...])
+
 ### tools for setting NiftiHeader ###
 """
-    setdim!(img) -> hdr::NiftiHeader
+    setdim!(hdr::NiftiHeader, img::AbstractArray) -> hdr::NiftiHeader
 
 Set the dimensions of a NiftiHeader based on some AbstractArray
 """
@@ -202,6 +216,13 @@ function setdim!(hdr::NiftiHeader, img::AbstractArray)
     hdr.dim = ones(Int16, 8)
     hdr.dim[1] = ndims(img)
     hdr.dim[2:dim[1]+1] = [size(img)...]
+end
+
+function setdescription!(hdr::NiftiHeader, d::String)
+    n = min(length(d), 80)
+    for i in 1:n
+        hdr.descrip[i] = convert(UInt8, d[i])
+    end
 end
 
 """
@@ -224,19 +245,6 @@ end
 function setpixdim!(hdr::NiftiHeader, img::ImageMeta)
     hdr.pixdim = ones(Int16, 8)
     hdr.pixdim[1:ndims(img)] = pixelspacing(img)
-end
-
-"""
-    setintent!(hdr::NiftiHeader, img::ImageMeta)
-
-"""
-function setintent!(hdr::NiftiHeader, img::ImageMeta)
-    hdr.intent_code = get(NIFTI_INTENT_REVERS,
-                          img.properties["header"]["intent_name"], 0)
-    hdr.intent_name = img.properties["header"]["intent_name"]
-    hdr.intent_p1 = img.properties["header"]["intent_param"][1]
-    hdr.intent_p2 = img.properties["header"]["intent_param"][2]
-    hdr.intent_p3 = img.properties["header"]["intent_param"][3]
 end
 
 # TODO test
@@ -268,7 +276,8 @@ function setaffine!(h::NiftiHeader, img::ImageMeta)
     #affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
     #    error("last row of affine matrix must be [0 0 0 1]")
     h.qform_code = one(Int16)
-    h.sform_code = one(Int16)
+    h.sform_code = get(NIFTI_XFORM_REVERSE,
+                       img.properties["header"]["xform"],0)
     h.quatern_b = zero(Float32)
     h.quatern_c = zero(Float32)
     h.quatern_d = zero(Float32)

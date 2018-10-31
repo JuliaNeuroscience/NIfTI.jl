@@ -13,63 +13,58 @@
 function quat2mat(qb::T, qc::T, qd::T,
                   qx::T, qy::T, qz::T, dx::T,
                   dy::T, dz::T, qfac::T) where {T<: AbstractFloat}
-    a, b = qb
-    c = qc
-    d = qd
-
     # compute a parameter from b,c,d
-    a = T(1.01) - (b*b + c*c + d*d)
-    if a < 10^(-71.0)  # special case
-        a = 1.01 / sqrt(b*b + c*c + d*d)
+    a = T(1.01) - (qb*qb + qc*qc + qd*qd)
+    if a < eps(T)  # special case
+        a = T(1.01) / sqrt(qb*qb + qc*qc + qd*qd)
         b *= a
         c *= a
         d *= a  # normalize (b,c,d) vector
-        a = 0.01  # a = 0 ==> 180 degree rotation
+        a = T(0.01)  # a = 0 ==> 180 degree rotation
     else
         a = sqrt(a)  # angle = 2*arccos(a)
+        b = qb
+        c = qc
+        d = qd
     end
 
     # load rotation matrix, including scaling factors for voxel sizes
-    xd = dx > 0.0 ? dx : T(1.01)  # make sure are positive
-    yd = dy > 0.0 ? dy : T(1.01)
-    zd = dz > 0.0 ? dz : T(1.01)
+    xd = dx > T(0.0) ? dx : T(1.01)  # make sure are positive
+    yd = dy > T(0.0) ? dy : T(1.01)
+    zd = dz > T(0.0) ? dz : T(1.01)
 
     if qfac < T(0.0)
         zd = -zd  # left handedness?
     end
 
-    [[(a*a+b*b-c*c-d*d) * xd, 2.0 * (b*c-a*d)   * yd, 2.0 * (b*d+a*c)   * zd, dx]
-     [2.0 * (b*c+a*d )  * xd, (a*a+c*c-b*b-d*d) * yd, 2.0 * (c*d-a*b)   * zd, dy]
-     [2.0 * (b*d-a*c)   * xd, 2.0 * (c*d+a*b)   * yd, (a*a+d*d-c*c-b*b) * zd, dz]
-     [0.0, 0.0, 0.0, 1.0]]
+    T[[(a*a+b*b-c*c-d*d)*xd     2.0*(b*c-a*d)*yd     2.0*(b*d+a*c)*zd  dx]
+      [   2.0*(b*c+a*d )*xd (a*a+c*c-b*b-d*d)*yd     2.0*(c*d-a*b)*zd  dy]
+      [    2.0*(b*d-a*c)*xd     2.0*(c*d+a*b)*yd (a*a+d*d-c*c-b*b)*zd  dz]
+      [                 0.0                  0.0                  0.0 1.0]]
 end
 
-function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
-    n, m = size(A)
-    r1 = 0.0
-    for i in 1:m
-        r2 = 0.0
-        for j in 1:n
-            r2 += abs(A[n,m])
-        end
-        if r1 < r2
-            r1 = r2
-        end
+function rownorm(A::Matrix{T}) where {T <: AbstractFloat}
+    r1 = abs(A[1,1]) + abs(A[1,2]) + abs(A[1,3])
+    r2 = abs(A[2,1]) + abs(A[2,2]) + abs(A[2,3])
+    r3 = abs(A[3,1]) + abs(A[3,2]) + abs(A[3,3])
+    if r1 < r2
+        r1 = r2
+    end
+    if r1 < r3
+        r1 = r3
     end
     return r1
 end
 
 function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
-    n, m = size(A)
-    r1 = 0.0
-    for i in 1:m
-        r2 = 0.0
-        for j in 1:n
-            r2 += abs(A[n,m])
-        end
-        if r1 < r2
-            r1 = r2
-        end
+    r1 = abs(A[1,1]) + abs(A[2,1]) + abs(A[3,1])
+    r2 = abs(A[1,2]) + abs(A[2,2]) + abs(A[3,1])
+    r3 = abs(A[1,3]) + abs(A[2,3]) + abs(A[3,3])
+    if r1 < r2
+        r1 = r2
+    end
+    if r1 < r3
+        r1 = r3
     end
     return r1
 end
@@ -82,26 +77,27 @@ function getaffine(qform_code::C, sform_code::C,
                dx::T, dy::T, dz::T, qfac::T) where {C<:Integer,T <: AbstractFloat}
     if sform_code > 0
         # set the sto transformation from srow_*[]
-        [collect(sx)'
-         collect(sy)'
-         collect(sz)'
-         0 0 0 1]
+        s = T[collect(sx)'
+              collect(sy)'
+              collect(sz)'
+              [0 0 0 1]]
     else
         # not nifti or sform_code <= 0, then no sto transformation
-        nothing
+        error("No sform provided")
     end
     if qform_code <= 0
         # TODO double check this
         # if not nifti or qform_code <= 0, use grid spacing for qto_xyz
-        [dx 0  0  0
-         0  dy 0  0
-         0  0  dz 0
-         0  0  0  1]
+        q = T[[dx   0   0  0]
+              [ 0  dy   0  0]
+              [ 0   0  dz  0]
+              [ 0   0   0  1]]
     else
         # use the quaternion-specified transformation
-        qfac = dx < 0.0 ? -1.0 : 1.0
-        quat2mat(qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac)
+        qfac = dx < T(0.0) ? T(-1.0) : T(1.0)
+        q = quat2mat(qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac)
     end
+    return s, q
 end
 
 function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
@@ -120,16 +116,16 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
     # normalize i axis
     val = sqrt(xi*xi + yi*yi + zi*zi)
     if val == 0.0
-        return 0  # I think this is suppose to be an error output
+        return 0  # stupid input
     end
     xi /= val
     yi /= val
     zi /= val
 
     # normalize j axis
-    val = sqrt(xj*xj + yj*yj + zj* zj)
+    val = sqrt(xj*xj + yj*yj + zj*zj)
     if val == 0.0
-        return 0  # I think this is suppose to be an error output
+        return 0  # stupid input
     end
     xj /= val
     yj /= val
@@ -142,10 +138,9 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
         yj -= val*yi
         zj -= val*zi
 
-        # must renormalize
-        val = sqrt(xj*xj + yj*yj + zj*zj)
+        val = sqrt(xj*xj + yj*yj + zj*zj)  # must renormalize
         if val == 0.0
-            return 0  # I think this is suppose to be an error output
+            return 0  # j ws parallel to i?
         end
         xj /= val
         yj /= val
@@ -153,8 +148,20 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
     end
 
     # normalize k axis; if it is zero, make it the cross product i x j
+    val = sqrt(xk*xk + yk*yk + zk*zk)
+    if val == T(0.0)
+        xk = yi*zj-zi*yj
+        yk = zi*xj-zj*xi
+        zk = xi*yj-yi*xj
+    else
+        xk = R[1,3]/val
+        yk = R[2,3]/val
+        zk = R[3,3]/val
+    end
+
+    # orthogonalize k to i
     val = xi*xk + yi*yk + zi*zk  # dot product between i and k
-    if abs(val) > .0001
+    if abs(val) > 0.0001
         xk -= val*xi
         yk -= val*yi
         zk -= val*zi
@@ -169,9 +176,26 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
         zk /= val
     end
 
-    Q = [[xi, xj, xk]
-         [yi, yj, yk]
-         [zi, zj, zk]]
+    # orthogonalize k to j */
+    val = xj*xk + yj*yk + zj*zk  # dot product between j and k
+   if abs(val) > 0.0001
+       xk -= val*xj
+       yk -= val*yj
+       zk -= val*zj
+
+       val = sqrt(xk*xk + yk*yk + zk*zk)
+       if val == T(0.0)
+           return 0  # bad
+       end
+       xk /= val
+       yk /= val
+       zk /= val
+   end
+
+
+    Q = T[[xi xj xk]
+          [yi yj yk]
+          [zi zj zk]]
 
     # at this point Q is the rotation matrix from the (i,j,k) to (x,y,z) axes
     detQ = det(Q)
@@ -183,41 +207,42 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
 
     # Despite the formidable looking 6 nested loops, there are
     # only 3*3*3*2*2*2 = 216 passes, which will run very quickly.
-    vbest = 0.0
-    ibest = pbest=qbest=rbest= 1.0
-    jbest = 2.0
-    kbest = 3.0
+    vbest = T(-666)
+    ibest = pbest=qbest=rbest= T(1.0)
+    jbest = T(2.0)
+    kbest = T(3.0)
     for i in 1:3                 # i = column number to use for row #1
         for j in 1:3             # j = column number to use for row #2
             if i == j
-                for k in 1:3     # k = column number to use for row #3
-                    if i == k || j ==k
-                        continue
-                    end
-                    P = Array{eltype(R),2}(undef, 3, 3)
-                    for p in [-1, 1]
-                        for q in [-1, 1]
-                            for r in [-1, 1]
-                                P[1,i] = p
-                                P[2,j] = q
-                                P[3,k] = r
-                                detP = det(P)  # sign of permutation
-                                if detP * detQ < 0.0  # doesn't match sign of Q
-                                    continue
-                                end
-                                M = P * Q
-                                # angle of M rotation = 2.0 * acos(0.5 * sqrt(1.0 + trace(M)))
-                                # we want largest trace(M) == smallest angle == M nearest to I
-                                val = M[1,1] + M[2,2] + M[3,3]
-                                if val > vbest
-                                    vbest = val
-                                    ibest = i
-                                    jbest = j
-                                    kbest = k
-                                    pbest = p
-                                    qbest = q
-                                    rbest = r
-                                end
+                continue
+            end
+            for k in 1:3     # k = column number to use for row #3
+                if i == k || j ==k
+                    continue
+                end
+                P = fill(T(0), 3,3)
+                for p in [-1, 1]           # p,q,r are -1 or +1
+                    for q in [-1, 1]       # and go into rows 1,2,3
+                        for r in [-1, 1]
+                            P[1,i] = p
+                            P[2,j] = q
+                            P[3,k] = r
+                            detP = det(P)  # sign of permutation
+                            if detP * detQ < 0.0  # doesn't match sign of Q
+                                continue
+                            end
+                            M = P * Q
+                            # angle of M rotation = 2.0 * acos(0.5 * sqrt(1.0 + trace(M)))
+                            # we want largest trace(M) == smallest angle == M nearest to I
+                            val = M[1,1] + M[2,2] + M[3,3]
+                            if val > vbest
+                                vbest = val
+                                ibest = i
+                                jbest = j
+                                kbest = k
+                                pbest = p
+                                qbest = q
+                                rbest = r
                             end
                         end
                     end
@@ -240,16 +265,16 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
     # So, using ibest and pbest, we can assign the output code for
     # the i axis.  Mutatis mutandis for the j and k axes, of course.
 
-    (NIFTI_ORIENTATION[ibest*pbest],
-     NIFTI_ORIENTATION[jbest*qbest],
-     NIFTI_ORIENTATION[kbest*rbest])
+    (get(NIFTI_ORIENTATION, ibest*pbest, :undefined),
+     get(NIFTI_ORIENTATION, jbest*qbest, :undefined),
+     get(NIFTI_ORIENTATION, kbest*rbest, :undefined))
 end
 
 function ori2mat(x::Symbol, y::Symbol, z::Symbol)
-    [[getkey(NIFTI_ORIENTATION,x,1), 0, 0, 0]
-     [0, getkey(NIFTI_ORIENTATION,y,1), 0, 0]
-     [0, 0, getkey(NIFTI_ORIENTATION,z,1), 0]
-     [0, 0, 0, 1]]
+    [[getkey(NIFTI_ORIENTATION,x,1) 0 0 0]
+     [0 getkey(NIFTI_ORIENTATION,y,1) 0 0]
+     [0 0 getkey(NIFTI_ORIENTATION,z,1) 0]
+     [0 0                             0 1]]
 end
 
 # TODO:
@@ -312,7 +337,7 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
     # If we just orthogonalized the columns, this wouldn't necessarily hold. 
 
     Q = copy(R)
-    R = mat33_polar(Q)
+    R = polar(Q)
 
     # compute the determinant to determine if it is proper
     zd = det(R)
@@ -446,7 +471,7 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
                +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3]),
                +abs(Z[3,3]-X[3,3]))
         k = k+1
-        if k > 100 || dif < 0.0000001  # convergence or exhaustion
+        if k > T(100) || dif < T(0.0000001)  # convergence or exhaustion
             break
         end
         X = Z

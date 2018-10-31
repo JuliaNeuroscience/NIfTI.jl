@@ -1,7 +1,7 @@
 const SIZEOF_HDR1 = Int32(348)
 const SIZEOF_HDR2 = Int32(540)
 
-const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
+const NIFTI_DT_BITSTYPES = Dict{Int16,Type}([
     (Int16(2), UInt8),
     (Int16(4), Int16),
     (Int16(8), Int32),
@@ -16,9 +16,9 @@ const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
     (Int16(1792), ComplexF64)
 ])
 
-const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
-for (k, v) in NIfTI_DT_BITSTYPES
-    NIfTI_DT_BITSTYPES_REVERSE[v] = k
+const NIFTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
+for (k, v) in NIFTI_DT_BITSTYPES
+    NIFTI_DT_BITSTYPES_REVERSE[v] = k
 end
 
 const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
@@ -49,13 +49,33 @@ const ANALYZE75_ORIENT = Dict{Symbol,Int16}([
 ])
 
 const NIFTI_ORIENTATION = Dict{Int16, Symbol}([
-    (Int16(1), :L2R),
+    (Int16(1),  :L2R),
     (Int16(-1), :R2L),
-    (Int16(2), :P2A),
+    (Int16(2),  :P2A),
     (Int16(-2), :A2P),
-    (Int16(3), :I2S),
+    (Int16(3),  :I2S),
     (Int16(-3), :S2I)
 ])
+
+ori2space = Dict{Symbol, Symbol}(
+    :L2R => :L,
+    :R2L => :R,
+    :P2A => :P,
+    :A2P => :A,
+    :I2S => :I,
+    :S2I => :S
+)
+ori_lut = [[   1   -1    2   -2    3   -3]
+           [:L2R :R2L :P2A :A2P :I2S :S2I]
+           [  :L   :R   :P   :A   :I   :S]]
+
+function isradview(axnames::NTuple{3,Symbol})
+    axnames == (:L, :A, :S)
+end
+
+function isneuroview(axnames::NTuple{3,Symbol})
+    axnames == (:R, :A, :S)
+end
 
 const NIFTI_SLICE = Dict{Int16, Symbol}([
     (Int16(0), :unkown),
@@ -84,60 +104,10 @@ const NIFTI_XFORM = Dict{Int16,Symbol}([
     (Int16(4), :mni152)
 ])
 
-const NIFTI_INTENT = Dict{Int16, String}(
-    # spm intent
-    0    => "NiftiImage",
-    2    => "Correlation",
-    3    => "TTest",
-    4    => "FTest",
-    5    => "ZScore",
-    6    => "Chisq",
-    7    => "Beta",
-    8    => "Binomial",
-    9    => "Gamma",
-    10   => "Poisson",
-    11   => "Normal",
-    12   => "NoncentralFTest",
-    13   => "NoncentralChisq",
-    14   => "Logistic",
-    15   => "Laplace",
-    16   => "Uniform",
-    17   => "NoncentralTTest",
-    18   => "Weibull",
-    19   => "Chi",
-    20   => "InverseGaussian",
-    21   => "ExtremeValue",
-    22   => "Pvalue",
-    23   => "logPvalue",
-    24   => "log₁₀Pvalue",
-    1001 => "Estimate",
+const NIFTI_XFORM_REVERSE = Dict{Symbol,Int16}()
 
-    # LabelImages
-    1002 => "Label",
-    1003 => "NeuroName",
-
-    # VectorImages
-    1004 => "GeneralMatrix",
-    1005 => "SymmetricMatrix",
-    1006 => "DisplacementVector",
-    1007 => "GeneralVector",
-    1008 => "PointSet",
-    1009 => "TriangleSet",
-
-    1010 => "Quaternion",
-    1011 => "Dimensionless",
-
-    # Gifti intent
-    2001 => "TimeSeries",
-    2002 => "NodeIndex",
-    2003 => "RGBVector",
-    2004 => "RGBAVector",
-    2005 => "Shape"
-)
-
-const NIFTI_INTENT_REVERSE = Dict{String,Int16}()
-for (k, v) in NIFTI_INTENT
-    NIFTI_INTENT_REVERSE[v] = k
+for (k, v) in NIFTI_XFORM
+    NIFTI_XFORM_REVERSE[v] = k
 end
 
 const NIFTI_ECODE = Dict{Int16, Symbol}([

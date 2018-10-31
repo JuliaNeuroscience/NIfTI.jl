@@ -1,4 +1,3 @@
-
 """
 Label Images
 
@@ -14,18 +13,50 @@ feature is not officially supported yet.
 
 
 """
-function intent_labels(aux_file::AbstractString, img::ImageMeta, args...; kwargs...)
-    if aux_file == "NeuroName"
-        # TODO this is much too large of a file to load into memory for each
-        # image that may use it. Maybe provide function in `properties` which
-        # appropriately indexes it, or extrat subset based on whats found in
-        # the volume + user args
-        img.properties["header"]["labels"] = load("~/.julia/packages/*/NeuroNames.xsl", args...; kwargs...)
-    elseif isfile(aux_file)
-        img.properties["header"]["labels"] = load(aux_file, args...; kwargs...)
+abstract type AbstractLabelImage end
+
+struct LabelImage <: AbstractLabelImage
+    labels::Dict{Integer,String}
+end
+
+function write_labelimage()
+end
+
+function LabelImage(img::ImageMeta, hdr::NiftiHeader, args...; kwargs...)
+    if isfile(hdr.aux_file)
+        # TODO what format should it import as?
+        load(aux_file, args...; kwargs...)
     else
         error("$aux_file not found")
     end
+end
+
+struct NeuroNameImage <: AbstractLabelImage
+    labels::Dict{Integer,String}
+end
+
+function NeuroNameImage(ontology::String)
+    # TODO this is much too large of a file to load into memory for each
+    # image that may use it. Maybe provide function in `properties` which
+    # appropriately indexes it, or extrat subset based on whats found in
+    # the volume + user args. Also should be able to specify which species
+    # atlas to use
+    labels = load("~/.julia/packages/*/NeuroNames.xsl")
+    NueroNameImage(ontology, labels)
+end
+
+function intent_labels(img::ImageMeta, hdr::NiftiHeader, args...; kwargs...)
+    intent = get(NIFTI_INTENT, hdr.intent_code, false)
+    img.properties["headaer"]["labels"] = intent(img, hdr)
     img
 end
 
+function setintent_labels!(hdr::NiftiHeader, img::ImageMeta;
+                           aux_file::Union{String,Integer}=0)
+    hdr.intent_code = NIFTI_INTENT_REVERSE[typeof(img.properties["header"]["intent"])]
+    hdr.aux_file = aux_file
+    if aux_file != 0
+        # TODO need to figure out how it should be imported
+        write(aux_file, img.properties["header"]["intent"].labels)
+    end
+end

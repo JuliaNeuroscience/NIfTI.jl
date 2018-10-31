@@ -24,11 +24,16 @@ function gethdr(f::AbstractString)
 end
 
 # load
-function read_volume(io::IO, vox_offset::F, datatype::Int16,
-                     scl_slope::F, scl_inter::F,
-                     needswap::Bool=false; mmap::Bool=false) where {F<:AbstractFloat}
-    seek(io, vox_offset)
-    dtype = NIfTI_DT_BITSTYPES[datatype]
+function read_volume(io::IO, hdr::NiftiHeader, needswap::Bool=false;
+                     mmap::Bool=false)
+    seek(io, Int(hdr.vox_offset))
+    dims = convert(Tuple{Vararg{Int}}, hdr.dim[2:hdr.dim[1]+1])
+
+    if !haskey(NIFTI_DT_BITSTYPES, hdr.datatype)
+        error("data type $(hdr.datatype) not yet supported")
+    end
+
+    dtype = NIFTI_DT_BITSTYPES[hdr.datatype]
     if mmap
         vol = Mmap.mmap(io, Array{dtype,length(dims)}, dims)
     else
@@ -37,19 +42,20 @@ function read_volume(io::IO, vox_offset::F, datatype::Int16,
     if needswap && sizeof(eltype(vol)) > 1
         vol = mappedarray((ntoh, hton), vol)
     end
+
     # scale if slope isn't zero
-    if scl_slope != F(0) && dtype != RGB24  # TODO finalize RGB types
-        vol = vol.*f.header.scl_slope.+f.header.scl_inter
+    if hdr.scl_slope != AbstractFloat(0) # && dtype != RGB24  # TODO finalize RGB types
+        vol = vol.*hdr.scl_slope.+hdr.scl_inter
     end
     vol
 end
 
 # TODO
-function write_volume(io::IO, vol::AbstractArray)
-end
+#function write_volume(io::IO, vol::AbstractArray)
+#end
 
 function load(f::File{format"NII"}; mode="r", mmap::Bool=false,
-              returntype::String="image")
+              returntype::Type=ImageMeta)
     open(f, mode) do s
         load(s; mmap=mmap, returntype=returntype)
     end
@@ -62,18 +68,14 @@ file is read into Julia as:
     * NiftiHeader: only loads subtypes of NiftiHeader type
 """
 function load(s::Stream{format"NII"}; mmap::Bool=false, returntype::Type=ImageMeta)
-    version, needswap = checkfile(s)
+    version, needswap = checkfile(stream(s))
     if returntype == ImageMeta
         header = ifelse(version == 1,
-                        read(s.io, Nifti1Header, needswap),
-                        read(s.io, Nifti2Header, needswap))
-        intent = makeintent(header.intent_code, header.intent_p1,
-                            header.intent_p2, header.intent_p3,
-                            header.intent_name, header.dim)
-        extension = read_extension(s, header, needswap)
-        volume = read_volume(s, header.vox_offset, header.datatype,
-                             needswap; mmap=mmap)
-        nii2img(volume, extension, header, intent)
+                        read(stream(s), Nifti1Header, needswap),
+                        read(stream(s), Nifti2Header, needswap))
+        extension = read_extension(stream(s), header, needswap)
+        volume = read_volume(stream(s), header, needswap; mmap=mmap)
+        nii2img(volume, extension, header)
     elseif returntype == NiftiHeader
         ifelse(version == 1,
                read(s.io, Nifti1Header, needswap),
@@ -107,7 +109,7 @@ function load(hdrf::File{format"HDR"}; mode="r", mmap::Bool=false,
 end
 
 function load(imgf::File{format"IMG"}; mode="r", mmap::Bool=false,
-              returntype::String="image")
+              returntype::Type=ImageMeta)
     hdrf = gethdr(imgf)
     open(hdrf, mode) do hdrs
         open(imgf) do imgs
@@ -131,45 +133,38 @@ end
 
 function load(hdrs::Stream{format"HDR"}, imgs::Stream{format"IMG"};
                     mmap::Bool=false, returntype::Type=ImageMeta)
-    version, needswap = checkfile(hdrs)
+    version, needswap = checkfile(stream(hdrs))
     if returntype == ImageMeta
         header = ifelse(version == 1,
-                read(hdrs.io, Nifti1Header, needswap),
-                read(hdrs.io, Nifti2Header, needswap))
-        intent = getintent(header)
-        extension = read_extension(hdrs, header, needswap)
-        volume = read_volume(imgs, header.vox_offset, header.datatype,
-                             needswap; mmap=mmap)
-        nii2img(volume, extension, header, intent)
+                        read(stream(hdrs.io), Nifti1Header, needswap),
+                        read(stream(hdrs), Nifti2Header, needswap))
+        extension = read_extension(stream(hdrs), header, needswap)
+        volume = read_volume(stream(imgs), header, needswap; mmap=mmap)
+        nii2img(volume, extension, header)
     elseif returntype == NiftiHeader
         ifelse(version == 1,
-               read(hdrs.io, Nifti1Header, needswap),
-               read(hdrs.io, Nifti2Header, needswap))
+               read(stream(hdrs), Nifti1Header, needswap),
+               read(stream(hdrs), Nifti2Header, needswap))
     else
         error("$returntype is not currently a supported NIfTI return type.")
     end
 end
 
 # save TODO
-function save(f::File{format"NII"}, img::ImageMeta)
-    open(f, "w") do io
-        hdr = getheader(img)
-        ext = getextension(img, hdr)
-        vol = getimage(img, hdr, ext)
+function save(f::File{format"NII"}, img::ImageMeta; version::Int)
+    open(f, "w") do s
+        hdr, vol, ext = img2nii(img)
 
         # ensure header, extension, and volume match up
-        if imgchecks(volume, extension, hdr)
-        end
-
         # Assume all is well and write
-        write_header(io, hdr)
-        write_extension(io, extension)
-        write_volume(io, volume)
+        write(stream(io), hdr)
+        write_extension(stream(s), ext)
+        write(stream(io), vol)
     end
 end
 
 # returns version, byteswap::Bool
-function checkfile(::Stream)
+function checkfile(s::IO)
     ret = read(s, Int32)
     seek(s,0)
     if ret == Int32(348)
@@ -185,36 +180,4 @@ function checkfile(::Stream)
     end
 end
 
-# FileIO stuff
 
-function detectnii(io::IO)
-    isgzipped = isgz(io)
-    hdrio = isgzipped ? gzdopen(io) : io
-    version, swap = checkfile(hdrio)
-    if version == 1
-        magic = seek(hdrio, number_to_magic)
-        return magic == NP1_MAGIC ? true : false
-    elseif version == 2
-        magic = read(hdrio, Array{UInt8}(undef,8))
-        return magic == NP1_MAGIC ? true : false
-    else
-        return false
-    end
-end
-
-function detecthdr(io::IO)
-    detectnii(io)
-end
-
-function detectimg(io::IO)
-    img_file = filename(io)
-    hdr_file = gethdr(img_file)
-    open(hdr_file, "r") do io
-        detectnii(io)
-    end
-end
-
-add_format(format"NII", detectnii, [".nii"], [:NIfTI])
-# HDR is already FileIO registered
-#add_format(format"HDR", detecthdr, [".hdr"], [:NIfTI])
-add_format(format"IMG", detectimg, [".img"], [:NIfTI])

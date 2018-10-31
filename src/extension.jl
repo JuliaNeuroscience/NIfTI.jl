@@ -9,8 +9,13 @@ end
 
 Set the offset to volume data accounting for extension size
 """
-setoffset!(hdr::NiftiHeader, ext::NiftiExtension) =
-    hdr.vox_offset = esize(ext) + hdr.sizeof_hdr
+setoffset!(hdr::Nifti1Header, ext::NiftiExtension) =
+    isempty(ext) ? hdr.sizeof_hdr :
+                   Int32(mapreduce(esize, +, ext) + hdr.sizeof_hdr)
+
+setoffset!(hdr::Nifti2Header, ext::NiftiExtension) =
+    isempty(ext) ? hdr.sizeof_hdr :
+                   Int64(mapreduce(esize, +, ext) + hdr.sizeof_hdr)
 
 # Calculates the size of a NIfTI extension
 esize(ex::NiftiExtension) = 8 + ceil(Int, length(ex.edata)/16)*16
@@ -18,7 +23,7 @@ esize(ex::NiftiExtension) = 8 + ceil(Int, length(ex.edata)/16)*16
 # TODO figure this garbage out
 # https://www.nitrc.org/forum/forum.php?thread_id=4380&forum_id=1955
 # https://www.nitrc.org/forum/attachment.php?attachid=341&group_id=454&forum_id=1955
-function read_extensions(io::IO, hdr::NiftiHeader)
+function read_extension(io::IO, hdr::NiftiHeader, needswap::Bool)
     if eof(io)
         return NiftiExtension[]
     end
@@ -29,12 +34,11 @@ function read_extensions(io::IO, hdr::NiftiHeader)
     end
 
     extensions = NiftiExtension[]
-    should_bswap = hdr.dim[1] > 7
     while hdr.magic == NP1_MAGIC ? position(io) < hdr.vox_offset : !eof(io)
         esize = read(io, Int32)
         ecode = read(io, Int32)
 
-        if should_bswap
+        if needswap
             esize = bswap(esize)
             ecode = bswap(ecode)
         end
