@@ -1,21 +1,7 @@
-
 mutable struct NiftiExtension
     ecode::Int32
     edata::Vector{UInt8}
 end
-
-"""
-    setoffset!(hdr::NiftiHeader, ext::NiftiExtension)
-
-Set the offset to volume data accounting for extension size
-"""
-setoffset!(hdr::Nifti1Header, ext::NiftiExtension) =
-    isempty(ext) ? hdr.sizeof_hdr :
-                   Int32(mapreduce(esize, +, ext) + hdr.sizeof_hdr)
-
-setoffset!(hdr::Nifti2Header, ext::NiftiExtension) =
-    isempty(ext) ? hdr.sizeof_hdr :
-                   Int64(mapreduce(esize, +, ext) + hdr.sizeof_hdr)
 
 # Calculates the size of a NIfTI extension
 esize(ex::NiftiExtension) = 8 + ceil(Int, length(ex.edata)/16)*16
@@ -23,7 +9,13 @@ esize(ex::NiftiExtension) = 8 + ceil(Int, length(ex.edata)/16)*16
 # TODO figure this garbage out
 # https://www.nitrc.org/forum/forum.php?thread_id=4380&forum_id=1955
 # https://www.nitrc.org/forum/attachment.php?attachid=341&group_id=454&forum_id=1955
-function read_extension(io::IO, hdr::NiftiHeader, needswap::Bool)
+
+# makes empty extension
+NiftiExtension() = NiftiExtension(Int32(0), zeros(Int8,4))
+NiftiExtension(img::ImageMeta) = @get img "extension" NiftiExtension()
+NiftiExtension(img::AbstractArray) = NiftiExtension
+
+function niread(io::IO, hdr::NiftiHeader, needswap::Bool, ::Type{NiftiExtension})
     if eof(io)
         return NiftiExtension[]
     end
@@ -31,10 +23,8 @@ function read_extension(io::IO, hdr::NiftiHeader, needswap::Bool)
     extension = read!(io, Array{UInt8}(undef, 4))
     if extension[1] != 1
         return NiftiExtension[]
-    end
+    else
 
-    extensions = NiftiExtension[]
-    while hdr.magic == NP1_MAGIC ? position(io) < hdr.vox_offset : !eof(io)
         esize = read(io, Int32)
         ecode = read(io, Int32)
 
@@ -43,13 +33,14 @@ function read_extension(io::IO, hdr::NiftiHeader, needswap::Bool)
             ecode = bswap(ecode)
         end
 
-        push!(extensions, NiftiExtension(ecode, read!(io, Array{UInt8}(undef, esize-8))))
+        return NiftiExtension(ecode, read!(io, Array{UInt8}(undef, esize-8)))
     end
-    extensions
 end
 
-# Write a NIfTI file
-function write_extension(io::IO, ext::NiftiExtension)
+# TODO
+# io is at write position for writing extension. this is only an issue for
+# cases of writing dynamically writing extension or volume data
+function write(io::IO, ext::NiftiExtension)
     if isempty(ext)
         write(io, Int32(0))
     else

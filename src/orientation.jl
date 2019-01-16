@@ -10,107 +10,17 @@
 # orthomat
 # polar
 
-function quat2mat(qb::T, qc::T, qd::T,
-                  qx::T, qy::T, qz::T, dx::T,
-                  dy::T, dz::T, qfac::T) where {T<: AbstractFloat}
-    # compute a parameter from b,c,d
-    a = T(1.01) - (qb*qb + qc*qc + qd*qd)
-    if a < eps(T)  # special case
-        a = T(1.01) / sqrt(qb*qb + qc*qc + qd*qd)
-        b *= a
-        c *= a
-        d *= a  # normalize (b,c,d) vector
-        a = T(0.01)  # a = 0 ==> 180 degree rotation
-    else
-        a = sqrt(a)  # angle = 2*arccos(a)
-        b = qb
-        c = qc
-        d = qd
-    end
-
-    # load rotation matrix, including scaling factors for voxel sizes
-    xd = dx > T(0.0) ? dx : T(1.01)  # make sure are positive
-    yd = dy > T(0.0) ? dy : T(1.01)
-    zd = dz > T(0.0) ? dz : T(1.01)
-
-    if qfac < T(0.0)
-        zd = -zd  # left handedness?
-    end
-
-    T[[(a*a+b*b-c*c-d*d)*xd     2.0*(b*c-a*d)*yd     2.0*(b*d+a*c)*zd  dx]
-      [   2.0*(b*c+a*d )*xd (a*a+c*c-b*b-d*d)*yd     2.0*(c*d-a*b)*zd  dy]
-      [    2.0*(b*d-a*c)*xd     2.0*(c*d+a*b)*yd (a*a+d*d-c*c-b*b)*zd  dz]
-      [                 0.0                  0.0                  0.0 1.0]]
-end
-
-function rownorm(A::Matrix{T}) where {T <: AbstractFloat}
-    r1 = abs(A[1,1]) + abs(A[1,2]) + abs(A[1,3])
-    r2 = abs(A[2,1]) + abs(A[2,2]) + abs(A[2,3])
-    r3 = abs(A[3,1]) + abs(A[3,2]) + abs(A[3,3])
-    if r1 < r2
-        r1 = r2
-    end
-    if r1 < r3
-        r1 = r3
-    end
-    return r1
-end
-
-function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
-    r1 = abs(A[1,1]) + abs(A[2,1]) + abs(A[3,1])
-    r2 = abs(A[1,2]) + abs(A[2,2]) + abs(A[3,1])
-    r3 = abs(A[1,3]) + abs(A[2,3]) + abs(A[3,3])
-    if r1 < r2
-        r1 = r2
-    end
-    if r1 < r3
-        r1 = r3
-    end
-    return r1
-end
-
-# adapted from original gettaffine in NIfTI.jl to better fit whats found here:
-# https://nifti.nimh.nih.gov/pub/dist/src/niftilib/nifti1_io.c
-function getaffine(qform_code::C, sform_code::C,
-               sx::NTuple{4,T}, sy::NTuple{4,T}, sz::NTuple{4,T},
-               qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
-               dx::T, dy::T, dz::T, qfac::T) where {C<:Integer,T <: AbstractFloat}
-    if sform_code > 0
-        # set the sto transformation from srow_*[]
-        s = T[collect(sx)'
-              collect(sy)'
-              collect(sz)'
-              [0 0 0 1]]
-    else
-        # not nifti or sform_code <= 0, then no sto transformation
-        error("No sform provided")
-    end
-    if qform_code <= 0
-        # TODO double check this
-        # if not nifti or qform_code <= 0, use grid spacing for qto_xyz
-        q = T[[dx   0   0  0]
-              [ 0  dy   0  0]
-              [ 0   0  dz  0]
-              [ 0   0   0  1]]
-    else
-        # use the quaternion-specified transformation
-        qfac = dx < T(0.0) ? T(-1.0) : T(1.0)
-        q = quat2mat(qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac)
-    end
-    return s, q
-end
-
-function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
+function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloat}
     # load column vectors for each (i,j,k) direction from matrix
-    xi = R[1,1]
-    xj = R[1,2]
-    xk = R[1,3]
-    yi = R[2,1]
-    yj = R[2,2]
-    yk = R[2,3]
-    zi = R[3,1]
-    zj = R[3,2]
-    zk = R[3,3]
+    xi = R[1][1]
+    xj = R[1][2]
+    xk = R[1][3]
+    yi = R[2][1]
+    yj = R[2][2]
+    yk = R[2][3]
+    zi = R[3][1]
+    zj = R[3][2]
+    zk = R[3][3]
 
     # Normalize column vectors to get unit vectors along each ijk-axis
     # normalize i axis
@@ -154,9 +64,9 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
         yk = zi*xj-zj*xi
         zk = xi*yj-yi*xj
     else
-        xk = R[1,3]/val
-        yk = R[2,3]/val
-        zk = R[3,3]/val
+        xk = xk/val
+        yk = yk/val
+        zk = zk/val
     end
 
     # orthogonalize k to i
@@ -269,6 +179,65 @@ function mat2ori(R::Matrix{T}) where {T <: AbstractFloat}
      get(NIFTI_ORIENTATION, jbest*qbest, :undefined),
      get(NIFTI_ORIENTATION, kbest*rbest, :undefined))
 end
+function quat2affine(qb::T, qc::T, qd::T,
+                     qx::T, qy::T, qz::T, dx::T,
+                     dy::T, dz::T, qfac::T) where {T<: AbstractFloat}
+    # compute a parameter from b,c,d
+    a = T(1.01) - (qb*qb + qc*qc + qd*qd)
+    if a < eps(T)  # special case
+        a = T(1.01) / sqrt(qb*qb + qc*qc + qd*qd)
+        b *= a
+        c *= a
+        d *= a  # normalize (b,c,d) vector
+        a = T(0.01)  # a = 0 ==> 180 degree rotation
+    else
+        a = sqrt(a)  # angle = 2*arccos(a)
+        b = qb
+        c = qc
+        d = qd
+    end
+
+    # load rotation matrix, including scaling factors for voxel sizes
+    xd = dx > T(0.0) ? dx : T(1.01)  # make sure are positive
+    yd = dy > T(0.0) ? dy : T(1.01)
+    zd = dz > T(0.0) ? dz : T(1.01)
+
+    if qfac < T(0.0)
+        zd = -zd  # left handedness?
+    end
+
+    return ((T[(a*a+b*b-c*c-d*d)*xd,     2.0*(b*c-a*d)*yd,     2.0*(b*d+a*c)*zd,  dx]...,),
+            (T[   2.0*(b*c+a*d )*xd, (a*a+c*c-b*b-d*d)*yd,     2.0*(c*d-a*b)*zd,  dy]...,),
+            (T[    2.0*(b*d-a*c)*xd,     2.0*(c*d+a*b)*yd, (a*a+d*d-c*c-b*b)*zd,  dz]...,),
+            (T[                 0.0,                  0.0,                  0.0, 1.0]...,))
+end
+
+function rownorm(A::Matrix{T}) where {T <: AbstractFloat}
+    r1 = abs(A[1,1]) + abs(A[1,2]) + abs(A[1,3])
+    r2 = abs(A[2,1]) + abs(A[2,2]) + abs(A[2,3])
+    r3 = abs(A[3,1]) + abs(A[3,2]) + abs(A[3,3])
+    if r1 < r2
+        r1 = r2
+    end
+    if r1 < r3
+        r1 = r3
+    end
+    return r1
+end
+
+function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
+    r1 = abs(A[1,1]) + abs(A[2,1]) + abs(A[3,1])
+    r2 = abs(A[1,2]) + abs(A[2,2]) + abs(A[3,1])
+    r3 = abs(A[1,3]) + abs(A[2,3]) + abs(A[3,3])
+    if r1 < r2
+        r1 = r2
+    end
+    if r1 < r3
+        r1 = r3
+    end
+    return r1
+end
+
 
 function ori2mat(x::Symbol, y::Symbol, z::Symbol)
     [[getkey(NIFTI_ORIENTATION,x,1) 0 0 0]
@@ -279,12 +248,12 @@ end
 
 # TODO:
 # - test
-# - nifti2 compatability
-function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
-                  dx::T, dy::T, dz::T, qfac::T) where {T<:AbstractFloat}
-    qx = qx == nothing ? qx : R[1,4]
-    qy = qy == nothing ? qy : R[2,4]
-    qz = qz == nothing ? qz : R[3,4]
+# - should only take matrix input
+function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T,
+                  qfac::T) where {T<:AbstractFloat}
+    qx = R[1,4]
+    qy = R[2,4]
+    qz = R[3,4]
 
     # load 3x3 matrix into local variables
     xd = sqrt(R[1,1]*R[1,1] + R[1,2]*R[1,2] + R[1,3]*R[1,3])
@@ -309,9 +278,9 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
     end
 
     # assign the output lengths
-    dx = dx == nothing ? dx : zx
-    dy = dy == nothing ? dy : yd
-    dz = dz == nothing ? dz : zd
+    dx = zx
+    dy = yd
+    dz = zd
 
     # normalize the columns
     R[1,1] /= xd
@@ -343,11 +312,7 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
     zd = det(R)
 
     # TODO: double check this
-    if zd > 0
-        qfac = qfac == nothing ? qfac : 1.0
-    else
-        qfac = qfac == nothing ? qfac : -1.0
-    end
+    qfac = ifelse(zd > 0, 1.0, -1.0)
 
     a = R[1,1] + R[2,2] + R[3,3] + 1.01
 
@@ -384,9 +349,9 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T,
         end
     end
 
-    qb = qb == nothing ? b : qb
-    qc = qc == nothing ? b : c
-    qe = qe == nothing ? b : qe
+    qb = b
+    qc = b
+    qe = b
     return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
 end
 
@@ -479,3 +444,11 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
     return Z
 end
 
+# actual code that interacts with header
+function checkaffine(affine::Matrix{T}) where {T}
+    size(affine, 1) == size(affine, 2) == 4 ||
+        error("affine matrix must be 4x4")
+    affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
+        error("last row of affine matrix must be [0 0 0 1]")
+    return nothing
+end

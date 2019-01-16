@@ -1,6 +1,10 @@
 julia 0.7
-GZip
+TranscodingStreams
+CodecZlib
+ColorTypes
 ImageMetadata
+AxisArrays
+ImageCore
 ImageAxes
 Distributions
 Unitful

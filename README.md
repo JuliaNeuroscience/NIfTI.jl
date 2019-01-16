@@ -54,19 +54,17 @@ niwrite("my.nii", ni)
 It is also possible to construct a new volume from scratch; see the
 `NIVolume` constructor in the source for documentation.
 
-## Image Intent
-
 ## Todo
 
-* [ ] Create (reasonably) comprehensive dictionatires for interpreting NIfTI fields
+* [x] Create (reasonably) comprehensive dictionatires for interpreting NIfTI fields
 * [ ] Interacting with headers/extensions
-* [ ] Add NIfTI-2 support
-* [ ] Support NIfTI intent types
-    * [ ] Most common cases probably just use plain ImageMeta
-    * [ ] Statistical parametric mapping
-    * [ ] Vector images (probably can just use ImageMeta with properly labeled AxisArrays)
-    * [ ] Pointset, triangle, etc. may need to have specific mesh format
-    * [ ] Quaternion may need own format (or just convert to array)
+    * [ ] Document fields and how to interpret/use
+    * [ ] Consistent extraction of values from `NiftiHeader`, `ImageMeta`, or `AbstractArray`
+* [x] Add NIfTI-2 support
+* [x] Support NIfTI intent types
+    * [x] Most common cases probably just use plain ImageMeta
+    * [x] Statistical parametric mapping
+    * [x] Vector images (probably can just use ImageMeta with properly labeled AxisArrays)
 * [ ] IO routines
     * [ ] header magic for fileio
     * [ ] NIfTI-1/2

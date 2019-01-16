@@ -1,26 +1,35 @@
 module NIfTI
 
 # using GeometryTypes
-using GZip, Mmap, ImageMetadata, ImageAxes, Unitful, FileIO, Distributions, LinearAlgebra
-import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
+using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
+      Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
+
+using ImageMetadata: @get
+using GeometryTypes: Triangle, Point
+using Rotations: Quat
+using AxisArrays: axisnames, permutation, AxisArray
+
+import Base64
 
 include("dictionaries.jl")
-include("orientation.jl")
 include("header.jl")
+include("orientation.jl")
 include("extension.jl")
-include("imagevector.jl")
-include("imagestats.jl")
-include("imagelabel.jl")
-include("gifti.jl")
-include("imageintent.jl")
-include("image.jl")
-include("io.jl")
+include("traits.jl")
+include("transform.jl")
+include("read.jl")
+include("write.jl")
+#include("fileio.jl")
 
-export NiftiHeader,
-       sdims,
-       pixelspacing,
-       nimages,
-       timedim
-       getaffine
+export NiftiSchema, sliceinfo, slicedim, spatunits, timeunits,
+       frequencydim, phasedim, description, auxfile, niread
 
 end
+
+# TODO
+# - should probably implement IndirectArrays for label images
+# - SymmetricMatrix
+# - check shape for Matrix intents
+# - Distribution documentation
+# - write intent methods
+# - scl_slope, scl_inter
