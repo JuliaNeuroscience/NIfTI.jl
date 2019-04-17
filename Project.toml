@@ -1,0 +1,27 @@
+name = "NIfTI"
+uuid = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
+version = "0.5.0"
+
+[deps]
+AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+ColorTypes = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
+GeometryTypes = "4d00f742-c7ba-57c2-abde-4428a4b178cb"
+ImageAxes = "2803e5a7-5153-5ecf-9a86-9b4c37f5f5ac"
+ImageCore = "a09fc81d-aa75-5fe9-8630-4744c3626534"
+ImageMetadata = "bc367c6b-8a6b-528e-b4bd-a4b897500b49"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MappedArrays = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
+Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
+Rotations = "6038ab10-8711-5258-84ad-4b1120ba62dc"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[compat]
+julia = "≥ 0.7.0"
