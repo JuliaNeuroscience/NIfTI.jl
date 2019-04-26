@@ -87,19 +87,13 @@ end
 """
     sform(A)
 """
+# may just drop sform as property and always grab from spacedirections in future
 function sform(img::ImageMeta)
-    if haskey(properties(img), "nifti")
-        return get(img["nifti"], "sform", sform(data(img)))
-    else
-        return sform(data(img))
-    end
-end
-
-function sform(A::AbstractArray)
-    SMatrix{4,4,Float64,16}(1.0, 0.0, 0.0, 0.0,
-                            0.0, 1.0, 0.0, 0.0,
-                            0.0, 0.0, 1.0, 0.0,
-                            0.0, 0.0, 0.0, 1.0)
+    sd = spacedirections(img)
+    SMatrix{4,4,eltype(sd),16}(sd[1,:]...,    0.0,
+                               sd[2,:]...,    0.0,
+                               sd[3,:]...,    0.0,
+                               0.0, 0.0, 0.0, 1.0)
 end
 
 """

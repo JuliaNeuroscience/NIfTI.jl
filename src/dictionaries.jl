@@ -40,7 +40,6 @@ const NI2_MAGIC = (0x6e,0x69,0x32,0x00, 0x0d, 0x0a,0x1a,0x0a)
 #Unitful.register(ppm)
 
 const NiftiUnits = Dict([
-    (Int16(0), nothing),
     (Int16(1), u"m"),  # meter
     (Int16(2), u"mm"),  # millimeters
     (Int16(3), u"μm"),  # microns

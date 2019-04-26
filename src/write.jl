@@ -1,148 +1,144 @@
-function scale_data(A::AbstractArray)
-    slope = 0
-    intercept = 0
-    return slope, intercept
-end
+# TODO:
+# niupdate!
 
-# AbstractArray → NIfTI
-function NiftiHeader(a::AbstractArray{T,N}, ext::NiftiExtension; v::Int=1,
-                     cal_max::Union{AbstractFloat,Nothing}=nothing,
-                     cal_min::Union{AbstractFloat,Nothing}=nothing,
-                     scl_slope::Float64=Float64(0),
-                     scl_inter::Float64=Float64(0)) where {T,N}
-    nitimeunits = unit(timeaxis(a)[1])
-    nispatunits = ([unit(i[1]) for i in indices_spatial(a)]...,)
-
-    to_diminfo(a) 
-    # Gets spatial and time units for header and converts them to type `Int` for use
-    # in a NIfTI file. (currently assumes all spatial units are same).
-    ss = get(NiftiUnitsReverse, spatunits(A)[1], 0)
-    tt = get(NiftiUnitsReverse, timeunits(A), 0)
-    niunits = (((char)(ss)) & 0x07) | (((char)(tt)) & 0x38)
-
-
-    # get nifti formatted dims
-    dims = ones(Int16, 8)
-    dims[1] = N
-    dims[2:dims[1]+1] = [size(a)...]
-    dims = (dim...,)
-
-    # Retrieves the element type of an image and converts it for encoding the element
-    # type stored in a NIfTI file.
-    niftiT = get(NIFTI_DT_BITSTYPES_REVERSE, T, nothing)
-    if niftiT == nothing
-        @error "Unsupported data type $(T)"
-    end
-
-    # nibitpix
-    nibitipix = Int16(sizeof(T)*8)
-
-    # pixdim
-    pixdim = ones(Int16, 8)
-    pixdim[1] = Int16(N)
-    pixdim[2:dim[1]+1] = [ustrip.(pixelspacing(a))...]
-    pixdim = (pixdim...,)
-
-    si = sliceinfo(a)
-
-    affinetuple = spacedirections(a)
-
-    if v == 1
-        sizeof_hdr = SIZEOF_HDR1
-        offsettype = Int32
-    elseif v == 2
-        sizeof_hdr = SIZEOF_HDR2
-        offsettype = Int64
+function voxoffset(A::AbstractArray, v::Val{1})
+    if isempty(extension(A))
+        SIZEOF_HDR1+4
     else
-        @error "Version $v is not a supported NIfTI version"
+        mapreduce(esize, +, extension(A))+SIZEOF_HDR1+4
     end
+end
 
-    if isempty(ext)
-        voxoffset = offsettype(sizeof_hdr)
+function voxoffset(A::AbstractArray, v::Val{2})
+    if isempty(extension(A))
+        SIZEOF_HDR2+4
     else
-        voxoffset = offsettype(mapreduce(esize, +, ext) + sizeof_hdr)
+        mapreduce(esize, +, extension(A))+SIZEOF_HDR2+4
     end
+end
 
-    # time offset
-    ta = timeaxis(a)
-    if ta == nothing
-        timeoffset = 1
+# Gets dim to be used in header
+function nidim(x::AbstractArray)
+    dim = ones(Int16, 8)
+    dim[1] = ndims(x)
+    dim[2:dim[1]+1] = [size(x)...]
+    (dim...,)
+end
+
+pixdim(A::AbstractArray{T,N}) where {T,N} =
+    map(i->ustrip(step(i.val)), AxisArrays.axes(A))::NTuple{N,<:Any}
+xyztunits(A::AbstractArray) =
+    (NiftiUnitsReverse[spatunits(A)[1]] & 0x07) | (NiftiUnitsReverse[timeunits(A)] & 0x38)
+
+function toffset(A::AbstractArray{T,N}) where {T,N}
+    ax = timeaxis(A)
+    if isa(ax, Nothing)
+        return Float64(1)
     else
-        timeoffset = ta[1]
+        Float64(ustrip(ax[1]))
     end
-
-    niintent = NiftiIntentsReverse(imageintent(a))
-
-    NiftiHeader(dim_info(a), dims, niintent.p1, niintent.p2, niintent.p3,
-                niintent.code, niftiT, nibitpix, si.slice_start,
-                pixdim, voxoffset, scl_slope, scl_inter, si.slice_end,
-                get(NIFTI_SLICE_REVERSE, si.slice_code, 0), niunits,
-                ifelse(cal_max == nothing, maximum(a), cal_max),
-                ifelse(cal_min == nothing, minimum(a), cal_min),
-                si.slice_duration, timeoffset, string_tuple(description(a), 80),
-                string_tuple(auxfile(a), 24), 0,  # default to blank qform
-                get(NiftiXFormReverse, xform(a), 0),  # xform_code
-                zero(Float32), zero(Float32), zero(Float32), zero(Float32),
-                zero(Float32), zero(Float32),
-                affinetuple[1], affinetuple[2], affinetuple[3],
-                niintent.name; v=v)
 end
 
+function writehdr1(s::ImageStream{T}) where T
+    write(s, Int32(348))                                  # sizeof_hdr::Int32
+    # data_type::NTuple{10,UInt8}, db_name::NTuple{18,UInt8},
+    # extents::Int32, session_error::Int16, regular::Int8
+    write(s, fill(Int8(0), 35))
+    write(s, Int8(diminfo(s)))                            # dim_info::Int8
+    write(s, reinterpret(Int16, nidim(s)))                # dim::NTuple{8,Int16}
+    write(s, reinterpret(Float32, intentparams(s)))       # intent_p1/2/3::Float32
+    write(s, Int16(NiftiIntentsReverse[intent(s)]))       # intent_code::Int16
+    write(s, Int16(NiftiDatatypesReverse[T]))             # datatype::Int16
+    write(s, Int16(sizeof(T)*8))                          # bitpix::Int16
+    write(s, Int16(slicestart(s)))                        # slice_start::Int16
+    write(s, reinterpret(Float32, pixdim(s)))             # pixdim::NTuple{8,Float32}
+    write(s, Float32(voxoffset(s, Val(1))))               # vox_offset::Float32
+    write(s, Float32(scaleslope(s)))                      # scl_slope::Float32
+    write(s, Float32(scaleintercept(s)))                  # scl_inter::Float32
+    write(s, Int16(sliceend(s)))                          # slice_end::Int16
+    write(s, Int8(NiftiSliceCodesReverse[slicecode(s)]))  # slice_code::Int8
+    write(s, Int8(xyztunits(s)))                          # xyzt_units::Int8
+    write(s, Float32(calmax(s)))                          # cal_max::Float32
+    write(s, Float32(calmax(s)))                          # cal_min::Float32
+    write(s, Float32(sliceduration(s)))                   # slice_duration::Float32
+    write(s, Float32(toffset(s)))                         # toffset::Float32
+    write(s, Int32[0, 0])                                 # glmax::Int32,glmin::Int32
 
-
-niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:ImageMeta} = niwrite_volume(io, hdr, data(a))
-niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:AxisArray} = niwrite_volume(io, hdr, data(a))
-
-function niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:AbstractArray{T,N}} where {T<:RGBA,N}
-    # 4 x dim1 x dim2 x ... → 4 * dim1 x dim2 x ....
-    rawsize = (size(hdr, 1) * 4, [hdr.dim[i] for i in 3:ndims(hdr)]...,)
-    a = reinterpret(Float32, reshape(channelview(a), rawsize))
-    write(io, a)
-end
-
-function niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:AbstractArray{T,N}} where {T<:RGB,N}
-    # 3 x dim1 x dim2 x ... → 3 * dim1 x dim2 x ....
-    rawsize = (size(hdr, 1) * 3, [hdr.dim[i] for i in 3:ndims(hdr)]...,)
-    a = reinterpret(Float32, reshape(channelview(a), rawsize))
-    write(io, a)
-end
-
-function niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:AbstractArray{T,N}} where {T<:Gray,N}
-    write(io, channelview(a))
-end
-
-function niwrite_volume(io::IO, hdr::NiftiHeader, a::A) where {A<:AbstractArray{T,N}} where {T<:Number,N}
-    write(io, a)
-end
-
-function niwrite(io::IO, a::AbstractArray; v::Int=1, scale_data::Bool=false,
-                 cal_max::Union{AbstractFloat,Nothing}=nothing,
-                 cal_min::Union{AbstractFloat,Nothing}=nothing)
-    ext = NiftiExtension(a)
-
-    # TODO need to convert array to same spatial axis
-    # TODO implement this
-    if scale_data
-        scl_slope, scl_inter = scale_data(a)
+    descrip = description(s)                              # descrip::NTuple{80,UInt8}
+    if length(descrip) > 80
+        write(s, codeunits(descrip[1:80]))
     else
-        scl_slope = 0.0
-        scl_inter = 0.0
+        write(s, descrip*String(fill(UInt8(0),80-length(descrip))))
     end
 
-    hdr = NiftiHeader(a, ext; v=v, cal_max=cal_max, cal_min=cal_min,
-                      scl_slope=scl_sclope, scl_inter=scl_inter)
+    aux = auxfile(s)  
+    if length(aux) > 24                                   # aux_file::NTuple{24,UInt8}
+        write(s, codeunits(aux[1:80]))
+    else
+        write(s, aux*String(fill(UInt8(0),24-length(aux))))
+    end
 
-    write(io, typeof(hdr))
-    write(io, ext)
+    write(s, Int16(NiftiXFormReverse[qformcode(s)]))      # qform_code::Int16
+    write(s, Int16(NiftiXFormReverse[sformcode(s)]))      # sform_code::Int16
 
-    niwrite_volume(io, hdr, a)
+    # TODO: should probably actually convert back
+    write(s, zero(Float32))                               # quatern_b::Float32
+    write(s, zero(Float32))                               # quatern_c::Float32
+    write(s, zero(Float32))                               # quatern_d::Float32
+    write(s, zero(Float32))                               # qoffset_x::Float32
+    write(s, zero(Float32))                               # qoffset_y::Float32
+    write(s, zero(Float32))                               # qoffset_z::Float32
+    write(s, convert(Array{Float32}, sform(s)')[:])       # srows... (switch to row major and unwrap)
+    write(s, codeunits(intentname(s)))                    # intent_name::NTuple{16,UInt8}
+    write(s, [NP1_MAGIC...])                              # magic::NTuple{8,UInt8}
 end
 
-function niwrite(io, A::AbstractArray{T,N}; kwarg...) where {T,N}
-    niwrite(io, NiftiExtension(A; kwarg...), NiftiExtension(A))
-end
-function niwrite(io::IO, hdr::NiftiExtension, ext::NiftiExtension, A::Array)
-    niwrite(io, hdr)
-    niwrite(io, ext)
-    niwrite(io, A)
+function writehdr2(s::ImageStream{T}) where T
+    write(s, Int32(540))                             # sizeof_hdr::Int32
+    write(s, NP2_MAGIC)                              # magic::NTuple{8,UInt8}
+    write(s, Int16(NiftiDatatypesReverse[T]))        # datatype::Int16
+    write(s, Int16(sizeof(T)*8))                     # bitpix::Int16
+    write(s, reinterpret(Int64, nidim(s)))           # dim::NTuple{8,Int64}
+    write(s, reinterpret(Float64, intentparams(s)))
+    write(s, reinterpret(Float64, pixdim(s)))        # pixdim::NTuple{8,Float64}
+    write(s, Int64(voxoffset(s, Val(2))))            # vox_offset::Int64
+    write(s, Float64(scaleslope(s)))                 # scl_slope::Float64
+    write(s, Float64(scaleintercept(s)))             # scl_inter::Float64
+    write(s, Float64(calmax(s)))                     # cal_max::Float64
+    write(s, Float64(calmin(s)))                     # cal_min::Float64
+    write(s, Float64(sliceduration(s)))              # slice_duration::Float64
+    write(s, Float64(toffset(s)))                    # toffset::Float64
+    write(s, Int64(slicestart(s)))                   # slice_start::Int64
+    write(s, Int64(sliceend(s)))                     # slice_end::Int64
+                            
+    descrip = description(s)                         # descrip::NTuple{80,UInt8}
+    if length(descrip) > 80
+        write(s, codeunits(descrip[1:80]))
+    else
+        write(s, descrip*String(fill(UInt8(0),80-length(descrip))))
+    end
+
+    aux = auxfile(s)  
+    if length(aux) > 24                                     # aux_file::NTuple{24,UInt8}
+        write(s, codeunits(aux[1:80]))
+    else
+        write(s, aux*String(fill(UInt8(0),24-length(aux))))
+    end
+
+    write(s, Int32(NiftiXFormReverse[qformcode(s)]))         # qform_code::Int32
+    write(s, Int32(NiftiXFormReverse[sformcode(s)]))         # sform_code::Int32
+    # TODO: should probably actually convert back
+    write(s, zero(Float64))                                  # quatern_b::Float64
+    write(s, zero(Float64))                                  # quatern_c::Float64
+    write(s, zero(Float64))                                  # quatern_d::Float64
+    write(s, zero(Float64))                                  # qoffset_x::Float64
+    write(s, zero(Float64))                                  # qoffset_y::Float64
+    write(s, zero(Float64))                                  # qoffset_z::Float64
+    write(s, convert(Array{Float64}, sform(s)')[:])          # srows... (switch to row major and unwrap)
+    write(s, Int32(NiftiSliceCodesReverse[slicecode(s)]))    # slice_code::Int32
+    write(s, Int32(xyztunits(s)))                            # xyzt_units::UInt32
+    write(s, Int32(NiftiIntentsReverse[intent(s)]))          # intent_code::Int32
+    write(s, codeunits(intentname(s)))                       # intent_name::NTuple{16,UInt8}
+    write(s, Int8(diminfo(s)))                               # dim_info::Int8
+    write(s, fill(UInt8(0), 15))                             # unused_str::NTuple{15,UInt8}
 end

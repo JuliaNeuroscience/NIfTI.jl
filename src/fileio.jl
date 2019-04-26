@@ -17,6 +17,29 @@ end
 
 loadstreaming(s::Stream{format"NII"}, args...) = nistreaming(stream(s), filename(s))
 
+
+function savestreaming(f::File{format"NII"}, A::AbstractArray; v::Int=2)
+    savestreaming(open(f), A; v=v)
+end
+
+function savestreaming(s::Stream{format"NII"}, A::AbstractArray; v::Int=2, ownstream::Bool=false)
+    if endswith(filename(s), ".gz")
+        io = gzdopen(stream(s))
+    else
+        io = stream(s)
+    end
+    ImageReader{format"NII"}(s, A, false, true)
+end
+
+function save(q::Formatted{format"NII"}, A::AbstractArray; v::Int=2)
+    savestreaming(q, A; v=v) do s
+        write(s)
+        write(s, A)
+    end
+end
+
+
+
 ### This ↓ needs to go in the FileIO registry
 function detectnii(io::IO)
     ret = read(io, Int32)
