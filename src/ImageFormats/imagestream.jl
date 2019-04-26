@@ -14,6 +14,12 @@ Base.getindex(d::ImageStreamMeta, key::String) = d.io[key]
 #Base.copy(d::ImageStreamMeta) = ImageFormat{F}(deepcopy(d.io))
 ##Base.empty(d::ImageStreamMeta{F}) where F = ImageStreamMeta{F}()
 
+ImageMetadata.properties(s::ImageStreamMeta) = s.io.properties
+ImageMetadata.copyproperties(s::ImageStreamMeta, io::IOType) where IOType =
+     ImageStream(io, deepcopy(properties(s)))
+ImageMetadata.shareproperties(s::ImageStreamMeta, io::IOType) where IOType =
+    ImageStream(io, properties(s))
+
 Base.delete!(d::ImageStreamMeta, k::String) = (delete!(d.io, k); d)
 Base.empty!(d::ImageStreamMeta) = (empty!(d.io); d)
 Base.isempty(d::ImageStreamMeta) = isempty(d.io)
@@ -65,19 +71,26 @@ Base.peek(s::ImageStream) = peek(stream(s))
 
 function read(s::ImageStream{T}, sink::Type{A}; mmap::Bool=false) where {T,A<:Array}
     if mmap
+        seek(s, data_offset(s))
         Mmap.mmap(stream(s), Array{T}, size(s))
     else
         read!(stream(s), Array{T}(undef, size(s)))
     end
 end
 
-read!(s::ImageStream{T}, sink::Array{T}) where T = read!(stream(s), sink)
+# use seek to ensure that there is not over/under shooting
+function read!(s::ImageStream{T}, sink::Array{T}) where T
+    seek(s, data_offset(s))
+    read!(stream(s), sink)
+end
 
 @inline function read(s::ImageStream{T}, sink::Type{A}; mmap::Bool=false) where {T,A<:StaticArray}
     SA = similar_type(A, T, Size(size(s)))
     if mmap
+        seek(s, data_offset(s))
         SA(Mmap.mmap(s, Array{T}, size(s)))
     else
+        seek(s, data_offset(s))
         read(stream(s), SA)
     end
 end
@@ -96,7 +109,26 @@ const ImageSAxes{T,N,Ax} = ImageMeta{T,N,<:AxisSArray{T,N,Ax}}
 
 read(s::ImageStream) = read(s, ImageDAxes)
 
-function readcat(f::Vector{<:AbstractString}; dims::Int)
-end
+# this will help with batch reading or possible implementations of CLI such as fslmerge
+#function readcat(f::Vector{<:AbstractString}; dims::Int) end
 
+# this will allow chunkwise reading of images
+# function readchunk() end
 
+#= TODO: These are what I'd like supported here
+ImageAxes.timeaxis(img::ImageMetaAxis) = timeaxis(data(img))
+ImageAxes.timedim(img::ImageMetaAxis) = timedim(data(img))
+ImageAxes.colordim(img::ImageMetaAxis) = colordim(data(img))
+ImageCore.pixelspacing(img::ImageMeta) = pixelspacing(data(img))
+
+istimeaxis,
+TimeAxis,
+HasTimeAxis,
+sdims
+coords_spatial
+nimages
+size_spatial
+indices_spatial
+assert_timedim_last
+spatialorder
+=#
