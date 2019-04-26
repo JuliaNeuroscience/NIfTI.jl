@@ -131,42 +131,42 @@ intentaxis(s::AbstractArray, ::Type{GiftiRGBA}) = Axis{:colordim}(1:4)
 function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
                 pixdim::NTuple{N}, s::IOMeta) where {N,F}
    # determine axisnames
-   if s["header"]["sformcode"] != :Unkown
+    if s["header"]["sformcode"] != :Unkown
        ori = orientation(s["header"]["sform"])
-   else
-       ori = orientation(s["header"]["qform"])
-   end
+    else
+        ori = orientation(s["header"]["qform"])
+    end
 
-   su = NiftiUnits[xyzt_units & 0x07]
-   axs = Vector{Axis}(undef, min(4,N))
-   axs[1] = Axis{ori[1]}(range(F(1), step=pixdim[1], length=sz[1])*su)
-   if N > 1
-       if pixdim[3] == 1
-           axs[2] = Axis{ori[2]}(Base.OneTo(sz[2]))*su
-       else
-           axs[2] = Axis{ori[2]}(range(F(1), step=pixdim[2], length=sz[2])*su)
-       end
-   end
-   if N > 2
-       if pixdim[3] == 1
-           axs[3] = Axis{ori[3]}(Base.OneTo(sz[3]))*su
-       else
-           axs[3] = Axis{ori[3]}(range(F(1), step=pixdim[3], length=sz[3])*su)
-       end
-   end
-   if N > 3
-       tu = NiftiUnits[xyzt_units & 0x38]
-       axs[4] = Axis{:time}(range(toffset, step=pixdim[4], length=sz[4])*tu)
-   end
-   if N > 4
-       append!(axs, intentaxis(s, pixdim, s["header"]["intent"]))
-   end
-   if N > 5
-       for i in 6:N
-           append!(axs, Axis{Symbol("dim$i")}(range(F(1), step=pixdim[i], length=sz[i])))
-       end
-   end
-   return (axs...,)
+    su = get(NiftiUnits, xyzt_units & 0x07, 1)
+    axs = Vector{Axis}(undef, min(4,N))
+    axs[1] = Axis{ori[1]}(range(F(1), step=pixdim[1], length=sz[1])*su)
+    if N > 1
+        if pixdim[3] == 1
+            axs[2] = Axis{ori[2]}(Base.OneTo(sz[2])*su)
+        else
+            axs[2] = Axis{ori[2]}(range(F(1), step=pixdim[2], length=sz[2])*su)
+        end
+    end
+    if N > 2
+        if pixdim[3] == 1
+            axs[3] = Axis{ori[3]}(Base.OneTo(sz[3])*su)
+        else
+            axs[3] = Axis{ori[3]}(range(F(1), step=pixdim[3], length=sz[3])*su)
+        end
+    end
+    if N > 3
+        tu = get(NiftiUnits, xyzt_units & 0x38, 1)
+        axs[4] = Axis{:time}(range(toffset, step=pixdim[4], length=sz[4])*tu)
+    end
+    if N > 4
+        append!(axs, intentaxis(s, pixdim, s["header"]["intent"]))
+    end
+    if N > 5
+        for i in 6:N
+            append!(axs, Axis{Symbol("dim$i")}(range(F(1), step=pixdim[i], length=sz[i])))
+        end
+    end
+    return (axs...,)
 end
 
 intentaxis(s, pixdim, ::Type) = Axis{:dim5}(range(Float64(1), step=s.pixdim[5], length=s.size[5]))
