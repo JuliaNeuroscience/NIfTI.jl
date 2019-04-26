@@ -59,7 +59,7 @@ function isneuroview(axnames::NTuple{3,Symbol})
     axnames == (:R, :A, :S) | axnames == (:R2L, :A2P, :S2I)
 end
 
-function isneuroview(axnames::String)
+function isradview(axnames::String)
     axnames == "left-anterior-superior" | axnames == "left-anterior-superior-time"
 end
 
