@@ -1,21 +1,18 @@
-function checkfile(io::TranscodingStream)
-    ret = read(io, 4)
-    hdrsz = reinterpret(Int32, ret)
-    if hdrsz[1] == Int32(348)
-        TranscodingStreams.unread(io, ret)
-        return 1, false
-    elseif hdrsz[1] == Int32(540)
-        TranscodingStreams.unread(io, ret)
-        return 2, false
-    elseif hdrsz[1] == ntoh(Int32(348))
-        TranscodingStreams.unread(io, ret)
-        return 1, true
-    elseif hdrsz[1] == ntoh(Int32(540))
-        TranscodingStreams.unread(io, ret)
-        return 2, true
+const MetaAxisArray{T,N} = ImageMeta{T,N,AxisArray{T,N,Array{T,N}}}
+const MetaArray{T,N} = ImageMeta{T,N,Array{T,N}}
+
+function readhdr(io::IO)
+    ret = read(io, Int32)
+    if ret == Int32(348)
+        readhdr1(IOMeta{:NII}(io, needswap=false))
+    elseif ret == Int32(540)
+        readhdr2(IOMeta{:NII}(io, needswap=false))
+    elseif ret == ntoh(Int32(348))
+        readhdr1(IOMeta{:NII}(io, needswap=true))
+    elseif ret == ntoh(Int32(540))
+        readhdr2(IOMeta{:NII}(io, needswap=true))
     else
-        TranscodingStreams.unread(io, ret)
-        return 0, false
+        error("Not a supported NIfTI format")
     end
 end
 
@@ -28,7 +25,7 @@ end
 
 function getimg(f::AbstractString)
     img_file = replace(f, ".hdr" => ".img")
-    if isfile(out)
+    if isfile(img_file)
         return img_file
     else
         error("NIfTI file is dual file storage, but $img_file does not exist")
@@ -37,188 +34,179 @@ end
 
 function gethdr(f::AbstractString)
     hdr_file = replace(f, ".img" => ".hdr")
-    if isfile(out)
+    if isfile(hdr_file)
         return hdr_file
     else
         error("NIfTI file is dual file storage, but $hdr_file does not exist")
     end
 end
 
-"""
-NiftiSchema
-
-* qformcode/sformcode: orientation relative to qform affine and sform affine respectively
-* sformcode: orientation relative to sform affine
-    - Unkown
-    - Scanner_anat
-    - Aligned_anat
-    - Talairach)
-    - MNI152
-* qform
-* sform:
-* spacedirections: affine orientation see @ref(`spacedirections`) for more information
-* `description`: see [`description`!](@ref)
-* `auxfile`: see [`auxfile`!](@ref)
-* "calibration": `cal_max` and `cal_min` refer to the maximum and minimu display intensity.
-  Values above `cal_max` and below `cal_min` should be binarized to a single
-  color (e.g., all values above `cal_max` are white and all values below `cal_min`
-  are black).
-
-"""
-struct NiftiSchema{S,T,intent}
-    axes::Tuple
-    props::Dict{String,Any}
-    needswap::Bool
+niread(f::String, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mode="r", mmap::Bool=false) = open(f, mode) do io
+    read(nistreaming(io, f), sink; mmap=mmap)
 end
 
-function NiftiSchema(io::IO)
-    version, needswap = checkfile(io)
-    if version == 1
-        hdr = niread(io, Nifti1Header, needswap)
-    elseif version == 2
-        hdr = niread(io, Nifti2Header, needswap)
+function niread(io::IO, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mode="r", mmap::Bool=false)
+    read(nistreaming(io, ), sink; mmap=mmap)
+end
+
+nistreaming(f::String; mode::String="r") = open(f, mode) do io
+    nistreaming(io, f)
+end
+
+function nitype(s::ImageStream)
+    if s["header"]["magic"] == NP1_MAGIC
+        return "NIfTI-1Single"
+    elseif s["header"]["magic"] == NI1_MAGIC
+        return "NIfTI-1Double"
+    elseif s["header"]["magic"] == NP2_MAGIC
+        return "NIfTI-2Single"
+    elseif s["header"]["magic"] == NI1_MAGIC
+        return "NIfTI-2Double"
     else
-        @error "File does not have NIfTI v1 or v2 header formatting."
+        error("Unsupported file type")
     end
+end
 
-    N = ndims(hdr)
-    sz = size(hdr)
-    su = spatunits(hdr)
-    props = Dict{String,Any}(
-        "description" => String([hdr.descrip...]),
-        "auxfile" => String([hdr.aux_file...]),
-        "header" => Dict{String,Any}(
-            "intentname" => String([hdr.intent_name...]),
-            "slice_duration" => hdr.slice_duration,
-            "extension" => niread(io, hdr, needswap, NiftiExtension),
-            "qformcode" => sformcode(hdr),
-            "qform" => qform(hdr),
-            "sformcode" => sformcode(hdr),
-            "sform" => sform(hdr),
-            "scale" => (slope = hdr.scl_slope, intercept = hdr.scl_inter),
-            "calibration" => (min = hdr.cal_min, max = hdr.cal_max)))
-
-    if hdr.sform_code > 0
-        props["spacedirections"] = ntuple(i -> props["header"]["sform"][i], 3)
-        ori = spatialorder(props["header"]["sform"])
+function nistreaming(io::IO, f::String)
+    if isgz(io)
+        gzs = gzdopen(io)
+        s = readhdr(gzs)
+        s["filename"] = [f]
+        if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
+            append!(s["filenames"], getimg(s["filenames"]))
+            close(s.io)
+            s.io = gzdopen(s["filenames"][2])
+        end
     else
-        props["spacedirections"] = ntuple(i -> props["header"]["qform"][i], 3)
-        ori = spatialorder(props["header"]["qform"])
-    end
-    intent = get(NiftiIntents, hdr.intent_code, eltype(hdr))
-
-    if N < 5
-        if intent <: Distribution
-            if intent <: StatP0
-                props["header"]["intent"] = intent()
-            elseif props["header"]["intent"] <: StatP1
-                props["header"]["intent"] = intent(hdr.intent_p1)
-            elseif props["header"]["intent"] <: StatP2
-                props["header"]["intent"] = intent(hdr.intent_p1,intent_p2)
-            elseif props["header"]["intent"] <: StatP3
-                props["header"]["intent"] = intent(hdr.intent_p1, hdr.intent_p2, hdr.intent_p3)
-            end
-        else
-            props["header"]["intent"] = intent
+        s = readhdr(io)
+        s["filename"] = [f]
+        if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
+            append!(s["filenames"], getimg(s["filenames"]))
+            close(s.io)
+            s.io = open(s["filenames"][2])
         end
     end
-
-    axs = Axis{ori[1]}(range(1, step=hdr.pixdim[2], length=hdr.dim[2])*su)
-    if N > 1
-        axs = (axs, Axis{ori[2]}(range(1, step=hdr.pixdim[3], length=size(hdr, 2))*su))
-    end
-    if N > 2
-        axs = (axs..., Axis{ori[3]}(range(1, step=hdr.pixdim[4], length=size(hdr,3))*su))
-    end
-    if N > 3
-        tu = timeunits(hdr)
-        axs = (axs..., Axis{:time}(range(hdr.toffset, step=hdr.pixdim[5], length=size(hdr,4))*tu))
-    end
-    if N > 4
-        for i in 5:N
-            axs = (axs..., Axis{Symbol("dim$i")}(range(1, step=hdr.pixdim[i+1], length=size(hdr,i))))
-        end
-    end
-    T = eltype(hdr)
-    if T == RGB
-        T = Float32
-        intent = RGB
-        sz = (3, sz...)
-    elseif T == RGBA
-        T = Float32
-        intent = RGBA
-        sz = (4, sz...)
-    end
-
-    return NiftiSchema{Tuple{sz...},T,intent}(axs, props, needswap)
+    return s
 end
 
-const MetaAxisArray{T,N} = ImageMeta{T,N,AxisArray{T,N,Array{T,N}}}
-# NIfTI
-function niread(f::AbstractString, sink::Type{A}=MetaAxisArray; mmap::Bool=false) where {A}
-    open(f) do s
-        if isgz(s)
-            return niread(GzipDecompressorStream(s), sink; mmap=mmap)
-        else
-            return niread(NoopStream(s), sink; mmap=mmap)
-        end
-    end
-end
+function readhdr1(s::IOMeta)
+    # Uncecessary fields
+    skip(s, 35)
 
-function niread(s::IO, sink::Type{A}; mmap::Bool=false) where {A}
-    schema = NiftiSchema(s)
-    niread(s, schema, sink; mmap=mmap)
-end
+    s["header"] = Dict{String,Any}()
+    s["header"]["diminfo"] = read(s, Int8)
+    N = Int(read(s, Int16))
+    sz = ([Int(read(s, Int16)) for i in 1:N]...,)
+    skip(s, (7-N)*2)  # skip filler dims
 
-# Analyze
-function niread(hdrf::AbstractString, imgf::AbstractString, ::Type{A}=Array; mmap::Bool=false) where {A}
-    open(hdrf) do hdrs
-        open(imgf) do imgs
-            if isgz(hdrs)
-                niread(GzipDecompressorStream(hdrs), GzipDecompressorStream(imgs), sink; mmap=mmap)
-            else
-                niread(NoopStream(hdrs), NoopStream(imgs), sink; mmap=mmap)
-            end
-        end
-    end
-end
+    # intent parameters
+    s["header"]["intentparams"] = (read!(s, Vector{Int32}(undef, 3))...,)
+    s["header"]["intent"] = get(NiftiIntents, read(s, Int16), NoIntent)
+    T = get(NiftiDatatypes, read(s, Int16), UInt8)
 
-function niread(hdrs::IO, imgs::IO, sink::Type{A}; mmap::Bool=false) where {A}
-    schema = NiftiSchema(hdrs)
-    niread(imgs, schema, sink; mmap=mmap)
-end
+    # skip bitpix
+    skip(s, 2)
+    s["header"]["slicestart"] = read(s, Int16)
 
-niread(io::IO, schema::NiftiSchema, sink::Type{<:NiftiSchema}; mmap::Bool=false) = schema
-niread(io::IO, schema::NiftiSchema, sink::Type{<:AxisArray}; mmap::Bool=false) =
-    AxisArray(niread(io, schema, fieldtype(sink, :data); mmap=mmap), schema.axes)
-niread(io::IO, schema::NiftiSchema, sink::Type{<:ImageMeta}; mmap::Bool=false) =
-    ImageMeta(niread(io, schema, fieldtype(sink, :data); mmap=mmap), schema.props)
+    qfac = read(s, Float32)
+    pixdim = (read!(s, Vector{Float32}(undef, N))...,)
 
-# Array
-function niread(io::IO, schema::NiftiSchema{S,T}, sink::Type{<:Array};
-                mmap::Bool=false) where {S,T}
-    if mmap
-        _niread(schema, Mmap.mmap(io, Array{T}, (S.parameters...,)))
+    skip(s, (7-N)*4)  # skip filler dims
+
+    s["data_offset"] = read(s, Float32)
+    s["header"]["scaleslope"] = read(s, Float32)
+    s["header"]["scaleintercept"] = read(s, Float32)
+    s["header"]["sliceend"] = read(s, Int16)
+    s["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int8), "Unkown")
+
+    xyzt_units = Int32(read(s, Int8))
+
+    s["calmax"] = read(s, Float32)
+    s["calmin"] = read(s, Float32)
+    s["header"]["sliceduration"] = read(s, Float32)
+    toffset = read(s, Float32)
+
+
+
+    skip(s, 8)
+    s["description"] = String(read(s, 80))
+    s["auxfile"] = String(read(s, 24))
+
+    s["header"]["qformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
+    s["header"]["sformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
+    s["header"]["qform"] = qform(s["header"]["qformcode"],
+                                 read!(s, Vector{Float32}(undef, 6))...,
+                                 pixdim[1], pixdim[2], pixdim[3], qfac)
+    # FIXME
+    s["header"]["sform"] = permutedims(SArray{Tuple{4,4},Float32,2,16}(
+                                        (read!(s, Vector{Float32}(undef, 12))...,
+                                         Float32[0, 0, 0, 1]...)), (2,1))
+    s["header"]["intentname"] = String(read(s, 16))
+    s["header"]["magic"] = (read(s, 4)...,)
+
+    if s["header"]["sformcode"] ==  :Unkown
+        s["spacedirections"] = s["header"]["qform"][1:3,1:3]
     else
-        _niread(schema, read!(io, Array{T}(undef, (S.parameters...,))))
+        s["spacedirections"] = s["header"]["sform"][1:3,1:3]
     end
+
+    s["header"]["extension"] = read(s, NiftiExtension)
+
+
+    return ImageStream{T}(s, niaxes(sz, xyzt_units, toffset, pixdim, s))
 end
 
-# StaticArray
-function niread(io::IO, schema::NiftiSchema{S,T}, sink::Type{<:StaticArray};
-                mmap::Bool=false) where {S,T}
-    dims = (S.parameters...,)
-    if mmap
-        _niread(schema, sink{S,T,length(dims),prod(dims)}(Mmap.mmap(io, Array{T}, sims)))
-    else
-        _niread(schema, read(io, sink{S,T,length(dims),prod(dims)}))
-    end
-end
+function readhdr2(s::IOMeta)
+    s["header"] = Dict{String,Any}()
+    s["header"]["magic"] = (read(s, 8)...,)
+    T = get(NiftiDatatypes, read(s, Int16), UInt8)
+    skip(s, 2)  # skip bitpix
 
-function _niread(schema::NiftiSchema{S,T,intent}, A::AbstractArray) where {S,T,intent}
-    if schema.needswap
-        mappedarray((ntoh, hton), A)
+    N = read(s, Int64)
+    sz = read(s, Vector{Int64}(undef, N))
+    skip(s, (7-N)*8)  # skip filler dims
+
+    s["header"]["intentparams"] = (read!(s, Vector{Float64}(undef, 3))...,)
+
+    qfac = read(s, Float64)  # FIXME: qfac is first dimension of otherwise unused pixdim[1]
+    pixdim = (read!(s, Vector{Float64}(undef, N))...,)
+    skip(s, (7-N)*8)  # skip filler dims
+
+    voxoffset = read(s, Int64)
+    s["header"]["scaleslope"] = read(s, Float64)
+    s["header"]["scaleintercept"] = read(s, Float64)
+    s["calmax"] = read(s, Float64)
+    s["calmin"] = read(s, Float64)
+
+    s["header"]["sliceduration"] = read(s, Float64)
+    toffset = read(s, Float64)
+
+    s["header"]["slicestart"] = read(s, Int64)
+    s["header"]["sliceend"] = read(s, Int64)
+    s["description"] = String(read(s, 80))
+    s["auxfile"] = String(read(s, 24))
+    s["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
+    s["header"]["sformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
+
+    s["header"]["qform"] = qform(s["header"]["qformcode"], read(s, Vector{Float64}(undef, 6))..., pixdim[1], pixdim[2], pixdim[3], qfac)
+    s["header"]["sform"] = transpose(
+                                   SMatrix{4,4,Float64,16}(
+                                        (read!(s, Vector{Float64}(undef, 12))..., 0.0, 0.0, 0.0, 1.0)))
+
+    s["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int32), "Unkown")
+
+    xyzt_units = read(s, Int32)
+    s["header"]["intent"] = get(NiftiIntents, read(s, Int32), NoIntent)
+    s["header"]["intentname"] = String(read(s, 16))
+    s["header"]["diminfo"] = read(s, Int8)
+    skip(s, 15)
+
+    if s["header"]["sformcode"] ==  :Unkown
+        s["spacedirections"] = s["header"]["qform"][1:3,1:3]
     else
-        A
+        s["spacedirections"] = s["header"]["sform"][1:3,1:3]
     end
+    s["header"]["extension"] = niread(s, NiftiExtension)
+
+    return ImageStream(s, niaxes(sz, xyzt_units, toffset, pixdim, s))
 end

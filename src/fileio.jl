@@ -1,19 +1,42 @@
-function detectnii(io::IO)
-    isgzipped = isgz(io)
-    hdrio = isgzipped ? gzdopen(io) : io
-    version, swap = checkfile(hdrio)
-    if version == 1
-        magic = seek(hdrio, number_to_magic)
-        return magic == NP1_MAGIC ? true : false
-    elseif version == 2
-        magic = read(hdrio, Array{UInt8}(undef,8))
-        return magic == NP1_MAGIC ? true : false
-    else
-        return false
+function load(f::File{format"NII"}, sink::Type{<:AbstractArray}=MetaAxisArray,
+    args...; mode="r", mmap::Bool=false)
+    open(f, mode) do s
+        load(s, sink, args...; mmap=mmap)
     end
 end
 
-detecthdr(io::IO) = detectnii(io)
+function load(s::Stream{format"NII"}, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mmap::Bool=false)
+    read(loadstreaming(s, args...), sink; mmap=mmap)
+end
+
+function loadstreaming(f::File{format"NII"}, args...; mode="r")
+    open(f, mode) do io
+        loadstreaming(io, filename(f))
+    end
+end
+
+loadstreaming(s::Stream{format"NII"}, args...) = nistreaming(stream(s), filename(s))
+
+### This ↓ needs to go in the FileIO registry
+function detectnii(io::IO)
+    ret = read(io, Int32)
+    if ret == Int32(348)
+        seek(io, 344)
+        return read(io, 4) == UInt8[0x6e,0x2b,0x31,0x00] |
+                read(io, 4) == UInt8[0x6e,0x69,0x31,0x00]
+    elseif ret == Int32(540)
+        return read(io, 8) == UInt8[0x6e,0x2b,0x32,0x00,0x0d,0x0a,0x1a,0x0a] |
+                read(io, 8) == UInt8[0x6e,0x69,0x32,0x00,0x0d,0x0a,0x1a,0x0a]
+    elseif ret == ntoh(Int32(348))
+        return read(io, 4) == UInt8[0x6e,0x2b,0x31,0x00] |
+                read(io, 4) == UInt8[0x6e,0x69,0x31,0x00]
+    elseif ret == ntoh(Int32(540))
+        return read(io, 8) == UInt8[0x6e,0x2b,0x32,0x00,0x0d,0x0a,0x1a,0x0a] |
+                read(io, 8) == UInt8[0x6e,0x69,0x32,0x00,0x0d,0x0a,0x1a,0x0a]
+    else
+        false
+    end
+end
 
 function detectimg(io::IO)
     img_file = filename(io)
@@ -23,15 +46,11 @@ function detectimg(io::IO)
     end
 end
 
-add_format(format"NII", detectnii, [".nii"], [:NIfTI])
-add_format(format"NIIGZ", (), [".nii.gz"], [:NIfTI])
+add_format(format"NII", detectnii, [".nii", ".nii.gz"], [:NIfTI])
+# Analyze format
+add_format(format"ANZ", detectimg, [".img"], [:NIfTI])
+#add_format(format"ANZ", detectnii, [".hdr"], [:NIfTI])
 
-# LoadError: format FileIO.DataFormat{:HDR} is already registered
-#add_format(format"HDR", detecthdr, [".hdr"], [:NIfTI])
-#add_format(format"HDRGZ", (), [".hdr.gz"], [:NIfTI])
-
-add_format(format"IMG", detectimg, [".img"], [:NIfTI])
-add_format(format"IMGGZ", (), [".img.gz"], [:NIfTI])
 
 """
 using NIfTI, AxisArrays, ImageMetadata
@@ -42,50 +61,4 @@ io = open(f)
 
 tmp = load(io, MetaAxisArray)
 """
-function load(f::File{format"NII"}, sinkType=MetaAxisArray; mmap::Bool=false)
-    open(f) do s
-        load(stream(s), sink; mmap=mmap)
-    end
-end
 
-function load(f::File{format"NIIGZ"}, sink::Type=MetaAxisArray)
-    GzipDecompressorStream(f) do s
-        load(stream(s), sink; mmap=mmap)
-    end
-end
-
-function load(hdrf::File{format"HDR"}, sink::Type=MetaAxisArray; mmap::Bool=false)
-    imgf = getimg(hdrf)
-    open(hdrf) do hdrio
-        open(imgf) do imgio
-            load(stream(hdrio), stream(imgio), sink; mmap=mmap)
-        end
-    end
-end
-
-function load(hdrf::File{format"HDRGZ"}, sink=NiftiStream)
-    imgf = getimg(hdrf)
-    GzipDecompressorStream(hdrf) do hdrio
-        GzipDecompressorStream(imgf) do imgiio
-            load(stream(hdrio), stream(imgio), sink; mmap=mmap)
-        end
-    end
-end
-
-function load(imgff::File{format"IMG"}, sink=NiftiStream; mmap::Bool=false)
-    hdrf = gethdr(imgf)
-    open(hdrf) do hdrio
-        open(imgf) do imgio
-            load(stream(hdrio), stream(imgio), sink; mmap=mmap)
-        end
-    end
-end
-
-function load(imgf::File{format"IMGGZ"}, sink)
-    hdrf = gethdr(imgf)
-    GzipDecompressorStream(hdrf) do hdrio
-        GzipDecompressorStream(imgf) do imgio
-            load(stream(hdrio), stream(imgio), sink; mmap=mmap)
-        end
-    end
-end

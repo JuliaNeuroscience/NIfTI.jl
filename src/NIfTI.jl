@@ -1,28 +1,65 @@
 module NIfTI
 
-# using GeometryTypes
-using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
-      Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
+using GZip, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
+      Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays,
+      Distributions, MappedArrays
 
-using ImageMetadata: @get
+import Base: read, write
+
 using GeometryTypes: Triangle, Point
 using Rotations: Quat
 using AxisArrays: axisnames, permutation, AxisArray
 
+
+
+# using GeometryTypes
+using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
+      Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
+
+import ImageMetadata: @get
+import GeometryTypes: Triangle, Point
+import Rotations: Quat
+import AxisArrays: axisnames, permutation, AxisArray
+
 import Base64
 
+
+include("ImageFormats/ImageFormats.jl")
+using .ImageFormats
+
 include("dictionaries.jl")
-include("header.jl")
+include("traits.jl")
 include("orientation.jl")
 include("extension.jl")
+include("intent.jl")
 include("traits.jl")
-include("transform.jl")
 include("read.jl")
 include("write.jl")
-#include("fileio.jl")
+include("fileio.jl")
 
-export NiftiSchema, sliceinfo, slicedim, spatunits, timeunits,
-       frequencydim, phasedim, description, auxfile, niread
+export niread,
+       niwrite,
+       phasedim,
+       frequencydim,
+       slicedim,
+       # ImageFormats
+       ImageFormat,
+       ImageProperties,
+       IOMeta,
+       ImageStream,
+       # properties
+       timeunits,
+       spatunits,
+       data_offset,
+       spataxes,
+       description,
+       auxfile,
+       calmin,
+       calmax,
+       header,
+       modality,
+       data_offset
+
 
 end
 

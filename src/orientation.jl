@@ -10,17 +10,17 @@
 # orthomat
 # polar
 
-function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloat}
+function orientation(R::StaticMatrix{4,4,T}) where T<:Union{Float64,Float32}
     # load column vectors for each (i,j,k) direction from matrix
-    xi = R[1][1]
-    xj = R[1][2]
-    xk = R[1][3]
-    yi = R[2][1]
-    yj = R[2][2]
-    yk = R[2][3]
-    zi = R[3][1]
-    zj = R[3][2]
-    zk = R[3][3]
+    xi = R[1,1]
+    xj = R[1,2]
+    xk = R[1,3]
+    yi = R[2,1]
+    yj = R[2,2]
+    yk = R[2,3]
+    zi = R[3,1]
+    zj = R[3,2]
+    zk = R[3,3]
 
     # Normalize column vectors to get unit vectors along each ijk-axis
     # normalize i axis
@@ -59,7 +59,7 @@ function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloa
 
     # normalize k axis; if it is zero, make it the cross product i x j
     val = sqrt(xk*xk + yk*yk + zk*zk)
-    if val == T(0.0)
+    if val == 0.0
         xk = yi*zj-zi*yj
         yk = zi*xj-zj*xi
         zk = xi*yj-yi*xj
@@ -94,7 +94,7 @@ function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloa
        zk -= val*zj
 
        val = sqrt(xk*xk + yk*yk + zk*zk)
-       if val == T(0.0)
+       if val == 0.0
            return 0  # bad
        end
        xk /= val
@@ -118,9 +118,9 @@ function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloa
     # Despite the formidable looking 6 nested loops, there are
     # only 3*3*3*2*2*2 = 216 passes, which will run very quickly.
     vbest = T(-666)
-    ibest = pbest=qbest=rbest= T(1.0)
-    jbest = T(2.0)
-    kbest = T(3.0)
+    ibest = pbest=qbest=rbest= 1.0
+    jbest = 2.0
+    kbest = 3.0
     for i in 1:3                 # i = column number to use for row #1
         for j in 1:3             # j = column number to use for row #2
             if i == j
@@ -130,7 +130,7 @@ function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloa
                 if i == k || j ==k
                     continue
                 end
-                P = fill(T(0), 3,3)
+                P = fill(0.0, 3, 3)
                 for p in [-1, 1]           # p,q,r are -1 or +1
                     for q in [-1, 1]       # and go into rows 1,2,3
                         for r in [-1, 1]
@@ -175,21 +175,22 @@ function ImageCore.spatialorder(R::NTuple{4,NTuple{4,T}}) where {T<:AbstractFloa
     # So, using ibest and pbest, we can assign the output code for
     # the i axis.  Mutatis mutandis for the j and k axes, of course.
 
-    (get(NIFTI_ORIENTATION, ibest*pbest, :undefined),
-     get(NIFTI_ORIENTATION, jbest*qbest, :undefined),
-     get(NIFTI_ORIENTATION, kbest*rbest, :undefined))
+    (get(ImageFormats.num2axes, ibest*pbest, :scannerx),
+     get(ImageFormats.num2axes, jbest*qbest, :scannery),
+     get(ImageFormats.num2axes, kbest*rbest, :scannerz))
 end
+
 function quat2affine(qb::T, qc::T, qd::T,
                      qx::T, qy::T, qz::T, dx::T,
-                     dy::T, dz::T, qfac::T) where {T<: AbstractFloat}
+                     dy::T, dz::T, qfac::T) where T<:Union{Float64,Float32}
     # compute a parameter from b,c,d
-    a = T(1.01) - (qb*qb + qc*qc + qd*qd)
-    if a < eps(T)  # special case
-        a = T(1.01) / sqrt(qb*qb + qc*qc + qd*qd)
+    a = 1.01 - (qb*qb + qc*qc + qd*qd)
+    if a < eps(Float64)  # special case
+        a = 1.01 / sqrt(qb*qb + qc*qc + qd*qd)
         b *= a
         c *= a
         d *= a  # normalize (b,c,d) vector
-        a = T(0.01)  # a = 0 ==> 180 degree rotation
+        a = 0.01  # a = 0 ==> 180 degree rotation
     else
         a = sqrt(a)  # angle = 2*arccos(a)
         b = qb
@@ -198,21 +199,21 @@ function quat2affine(qb::T, qc::T, qd::T,
     end
 
     # load rotation matrix, including scaling factors for voxel sizes
-    xd = dx > T(0.0) ? dx : T(1.01)  # make sure are positive
-    yd = dy > T(0.0) ? dy : T(1.01)
-    zd = dz > T(0.0) ? dz : T(1.01)
+    xd = dx > 0.0 ? dx : 1.01  # make sure are positive
+    yd = dy > 0.0 ? dy : 1.01
+    zd = dz > 0.0 ? dz : 1.01
 
-    if qfac < T(0.0)
+    if qfac < 0.0
         zd = -zd  # left handedness?
     end
 
-    return ((T[(a*a+b*b-c*c-d*d)*xd,     2.0*(b*c-a*d)*yd,     2.0*(b*d+a*c)*zd,  dx]...,),
-            (T[   2.0*(b*c+a*d )*xd, (a*a+c*c-b*b-d*d)*yd,     2.0*(c*d-a*b)*zd,  dy]...,),
-            (T[    2.0*(b*d-a*c)*xd,     2.0*(c*d+a*b)*yd, (a*a+d*d-c*c-b*b)*zd,  dz]...,),
-            (T[                 0.0,                  0.0,                  0.0, 1.0]...,))
+    SMatrix{4,4,T}([((a*a+b*b-c*c-d*d)*xd) (2.0*(b*c-a*d)*yd)     (2.0*(b*d+a*c)*zd)     dx
+                     (2.0*(b*c+a*d )*xd)   ((a*a+c*c-b*b-d*d)*yd)  (2.0*(c*d-a*b)*zd)     dy
+                     (2.0*(b*d-a*c)*xd)    (2.0*(c*d+a*b)*yd)      ((a*a+d*d-c*c-b*b)*zd) dz
+                      0.0                    0.0                    0.0                    1.0])
 end
 
-function rownorm(A::Matrix{T}) where {T <: AbstractFloat}
+function rownorm(A::StaticMatrix{3,3,T}) where {T <: AbstractFloat}
     r1 = abs(A[1,1]) + abs(A[1,2]) + abs(A[1,3])
     r2 = abs(A[2,1]) + abs(A[2,2]) + abs(A[2,3])
     r3 = abs(A[3,1]) + abs(A[3,2]) + abs(A[3,3])
@@ -225,7 +226,7 @@ function rownorm(A::Matrix{T}) where {T <: AbstractFloat}
     return r1
 end
 
-function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
+function colnorm(A::StaticMatrix{3,3,T}) where {T <: AbstractFloat}
     r1 = abs(A[1,1]) + abs(A[2,1]) + abs(A[3,1])
     r2 = abs(A[1,2]) + abs(A[2,2]) + abs(A[3,1])
     r3 = abs(A[1,3]) + abs(A[2,3]) + abs(A[3,3])
@@ -238,18 +239,17 @@ function colnorm(A::Matrix{T}) where {T <: AbstractFloat}
     return r1
 end
 
-
 function ori2mat(x::Symbol, y::Symbol, z::Symbol)
-    [[getkey(NIFTI_ORIENTATION,x,1) 0 0 0]
-     [0 getkey(NIFTI_ORIENTATION,y,1) 0 0]
-     [0 0 getkey(NIFTI_ORIENTATION,z,1) 0]
-     [0 0                             0 1]]
+    [[get(ImageFormats.axes2num, x, 1) 0 0 0]
+     [0 get(ImageFormats.axes2num, x, 2) 0 0]
+     [0 0 get(ImageFormats.axes2num, x, 3) 0]
+     [0 0                               0 1]]
 end
 
 # TODO:
 # - test
 # - should only take matrix input
-function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T,
+function mat2quat(R::AbstractMatrix{T}, qb::T, qc::T, qd::T,
                   qfac::T) where {T<:AbstractFloat}
     qx = R[1,4]
     qy = R[2,4]
@@ -278,7 +278,7 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T,
     end
 
     # assign the output lengths
-    dx = zx
+    dx = xd
     dy = yd
     dz = zd
 
@@ -355,7 +355,7 @@ function mat2quat(R::Matrix{T}, qb::T, qc::T, qd::T,
     return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
 end
 
-function orthomat(R::Matrix{T}) where {T<:AbstractFloat}
+function orthomat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     Q = copy(R)
 
     # normalize row 1
@@ -400,8 +400,9 @@ function orthomat(R::Matrix{T}) where {T<:AbstractFloat}
     polar(Q)
 end
 
+# FIXME
 function polar(A::Matrix{T}) where {T<:AbstractFloat}
-    X = copy(R)
+    X = copy(A)
     gam = det(X)
     while gam == 0.0  # perturb matrix
         gam = 0.00001 * (0.001 + rownorm(X))
@@ -411,6 +412,7 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
         gam = det(X)
     end
 
+    Z = copy(X)
     while true
         Y = inv(X)
         if dif > 0.3  # far from convergence
@@ -444,11 +446,14 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
     return Z
 end
 
-# actual code that interacts with header
-function checkaffine(affine::Matrix{T}) where {T}
-    size(affine, 1) == size(affine, 2) == 4 ||
-        error("affine matrix must be 4x4")
-    affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
-        error("last row of affine matrix must be [0 0 0 1]")
-    return nothing
+function qform(qformcode::Symbol, qb::T, qc::T, qd::T, qx::T, qy::T, qz::T, dx::T,
+               dy::T, dz::T, qfac::T) where {T<:Union{Float64,Float32}}
+    if qformcode == :Unkown
+        return SMatrix{4,4,T,16}(dx,  0.0,  0.0, 0.0,
+                                 0.0,  dy,  0.0, 0.0,
+                                 0.0,  0.0,  dz, 0.0,
+                                 0.0,  0.0, 0.0, 1.0)
+    else
+        return quat2affine(qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac)
+    end
 end

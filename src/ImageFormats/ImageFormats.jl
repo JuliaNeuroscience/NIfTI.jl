@@ -32,6 +32,7 @@ include("imageproperties.jl")
 include("iometa.jl")
 include("imagestream.jl")
 include("traits.jl")
+include("orientation.jl")
 # TODO: I'm shelfing this until we get NamedDims worked out
 #include("transforms.jl")
 
