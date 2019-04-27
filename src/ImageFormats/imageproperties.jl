@@ -1,3 +1,11 @@
+#= quick thought
+
+struct ImageProperties{S} <: AbstractDict{String,Any}
+    header::H
+    spatial::S
+end
+
+=#
 """
     ImageProperties
 
@@ -18,9 +26,12 @@ struct ImageProperties{sym} <: AbstractDict{String,Any}
     ImageProperties(d::AbstractDict{String,Any}) = new{:NOTHING}(d)
     ImageProperties{sym}(d::AbstractDict{String,Any}) where {sym} = new{sym}(d)
 end
+
 ImageProperties() = ImageProperties{:Nothing}()
 ImageProperties{sym}() where {sym} = ImageProperties{sym}(Dict{String,Any}())
 
+function ImageProperties(ImageMeta)
+end
 
 metatype(d::ImageProperties{sym}) where {sym} = sym
 
@@ -55,5 +66,3 @@ Base.iterate(d::ImageProperties, state) = iterate(d.data, state)
 Base.length(d::ImageProperties) = length(d.data)
 
 Base.filter!(f, d::ImageProperties) = filter!(f, d.data)
-
-

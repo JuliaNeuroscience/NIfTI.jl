@@ -14,6 +14,7 @@ export ImageFormat,
        ImageProperties,
        IOMeta,
        ImageStream,
+       SwapStream,
        # properties
        timeunits,
        spatunits,
@@ -27,7 +28,7 @@ export ImageFormat,
        modality,
        data_offset
 
-
+include("swapstreams.jl")
 include("imageproperties.jl")
 include("iometa.jl")
 include("imagestream.jl")

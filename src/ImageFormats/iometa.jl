@@ -1,26 +1,21 @@
-struct IOMeta{F,IOType<:IO,S}
+"""
+    IOMeta
+
+```jldoctest
+julia> io = IOMeta(IOBuffer())
+```
+"""
+struct IOMeta{IOType<:IO,P<:AbstractDict{String,Any}} <:IO
     io::IOType
-    properties::ImageProperties{F}
+    properties::P
+
+    IOMeta(io::IO, d::AbstractDict{String,Any}) where {IOType<:IO} = new{typeof(io),typeof(d)}(io, d)
 end
 
-function myendian()
-    if ENDIAN_BOM == 0x04030201
-        return "little"
-    elseif ENDIAN_BOM == 0x01020304
-        return "big"
-    end
-end
+IOMeta(io::IOType) where {IOType<:IO, F} = IOMeta(io, Dict{String,Any}())
 
 
-IOMeta(io::IOType, d::AbstractDict{String,Any}; needswap::Bool=false) where {IOType<:IO} =
-    IOMeta(io, ImageProperties(d); needswap=needswap)
-IOMeta(io::IOType, d::ImageProperties{F}; needswap::Bool=false) where {IOType<:IO, F} =
-    IOMeta{F,IOType,needswap}(io, d)
-IOMeta{F}(io::IOType; needswap::Bool=false) where {IOType<:IO, F} =
-    IOMeta{F,IOType,needswap}(io, ImageProperties{F}())
-IOMeta(io::IOType; needswap::Bool=false) where {IOType<:IO, F} =
-    IOMeta{:NOTHING,IOType,needswap}(io, ImageProperties{:NOTHING}())
-
+ImageMetadata.properties(io::IOMeta) = io.properties
 
 Base.setindex!(d::IOMeta, X, propname::AbstractString) = setindex!(d.properties, X, propname)
 Base.getindex(d::IOMeta, propname::AbstractString) = d.properties[propname]
@@ -50,7 +45,7 @@ Base.get!(f::Function, d::IOMeta, key::String) = get!(f, d.properties, key)
 Base.filter!(f, d::IOMeta) = filter!(f, d.properties)
 
 # I/O Interface #
-FileIO.stream(s::IOMeta{F,IOType}) where {F,IOType} = s.io::IOType
+FileIO.stream(s::IOMeta{IOType}) where IOType = s.io::IOType
 
 Base.seek(s::IOMeta, n::Integer) = seek(stream(s), n)
 Base.position(s::IOMeta)  = position(stream(s))
@@ -70,26 +65,33 @@ Base.seekend(s::IOMeta) = seekend(stream(s))
 Base.peek(s::IOMeta) = peek(stream(s))
 
 read(s::IOMeta, n::Int) = read(stream(s), n)
-read(s::IOMeta{F,IOType,true}, x::Type{<:AbstractArray}) where {F,IOType} = bswap.(read(stream(s), x))
-read(s::IOMeta{F,IOType,false}, x::Type{<:AbstractArray}) where {F,IOType} = read(stream(s), x)
+read(s::IOMeta, x::Type{<:AbstractArray}) = read(stream(s), x)
 read(s::IOMeta, x::Type{Int8}) = read(stream(s), Int8)
 
-read!(s::IOMeta{<:Any,<:IO,false}, a::Array) = read!(stream(s), a)
-read!(s::IOMeta{<:Any,<:IO,true}, a::Array) = bswap.(read!(stream(s), a))
 
-function read(s::IOMeta{F,IOType,false},
-              T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}}
-             ) where {F,IOType}
-    return read!(stream(s), Ref{T}(0))[]::T
-end
-
-function read(s::IOMeta{F,IOType,true},
-              T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}}
-             ) where {F,IOType}
-    return bswap(read!(stream(s), Ref{T}(0))[]::T)
+for T in (Bool,UInt128,UInt16,UInt32,UInt64,UInt8,BigInt,Int128,Int16,Int32,Int64,Int8,
+          BigFloat,Float16,Float32,Float64)
+    @eval begin
+        read!(s::IOMeta, a::Array{$T}) = read!(stream(s), a)
+    end
 end
 
 
-write(s::IOMeta{F,IOType,true}, x::AbstractArray) where {F,IOType} = write(stream(s), mappedarray((ntoh, hton), x))
-write(s::IOMeta{F,IOType,true}, x::T) where {F,IOType,T} = write(stream(s), bswap.(x))
-write(s::IOMeta{F,IOType,false}, x::T) where {F,IOType,T} = write(stream(s), x)
+#=
+function read!(s::IOMeta{<:IO,<:AbstractDict},
+    a::Array{<:Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},
+                     Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}}})
+    read!(stream(s), a)
+end
+=#
+
+function read(s::IOMeta,
+    T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},
+             Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    read!(stream(s), Ref{T}(0))[]::T
+end
+
+read!(s::IOMeta, ref::Base.RefValue{<:NTuple{N,T}}) where {N,T} = read!(stream(s), ref)[]
+
+write(s::IOMeta{<:IO,<:AbstractDict}, x::Array) = write(stream(s), x)
+write(s::IOMeta{<:IO,<:AbstractDict}, x::T) where T = write(stream(s), x)

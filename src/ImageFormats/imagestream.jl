@@ -1,40 +1,21 @@
 mutable struct ImageStream{T,I<:Tuple,IOType}
     io::IOType
     indices::I
+    properties::ImageProperties
 end
 
-ImageStream{T}(io::IOType, indices::I) where {T,IOType,I} = ImageStream{T,I,IOType}(io, indices)
+ImageStream{T}(io::IOMeta{IOType}, indices::I) where {T,I,IOType} =
+    ImageStream{T,I,IOType}(stream(io), indices, properties(io))
 
-# partial dict like interface
-ImageStreamMeta{T,I,F,IOType,S} = ImageStream{T,I,IOMeta{F,IOType,S}}
+function ImageStream(f, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
+    ImageStream{T}(open(f, mode), AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+end
 
-Base.setindex!(d::ImageStreamMeta, val, key::String) = setindex!(d.io, val, key)
-Base.getindex(d::ImageStreamMeta, key::String) = d.io[key]
-
-#Base.copy(d::ImageStreamMeta) = ImageFormat{F}(deepcopy(d.io))
-##Base.empty(d::ImageStreamMeta{F}) where F = ImageStreamMeta{F}()
-
-ImageMetadata.properties(s::ImageStreamMeta) = s.io.properties
-ImageMetadata.copyproperties(s::ImageStreamMeta, io::IOType) where IOType =
+ImageMetadata.properties(s::ImageStream) = s.properties
+ImageMetadata.copyproperties(s::ImageStream, io::IOType) where IOType =
      ImageStream(io, deepcopy(properties(s)))
-ImageMetadata.shareproperties(s::ImageStreamMeta, io::IOType) where IOType =
+ImageMetadata.shareproperties(s::ImageStream, io::IOType) where IOType =
     ImageStream(io, properties(s))
-
-Base.delete!(d::ImageStreamMeta, k::String) = (delete!(d.io, k); d)
-Base.empty!(d::ImageStreamMeta) = (empty!(d.io); d)
-Base.isempty(d::ImageStreamMeta) = isempty(d.io)
-
-Base.in(item, d::ImageStreamMeta) = in(item, d.io)
-
-Base.pop!(d::ImageStreamMeta, key, default) = pop!(d.io, key, default)
-Base.pop!(d::ImageStreamMeta, key) = pop!(d.io, key)
-Base.push!(d::ImageStreamMeta, kv::Pair) = insert!(d.io, kv)
-Base.push!(d::ImageStreamMeta, kv) = push!(d.io, kv)
-
-Base.haskey(d::ImageStreamMeta, k::String) = haskey(d.io, k)
-Base.keys(d::ImageStreamMeta) = keys(d.io)
-Base.getkey(d::ImageStreamMeta, key, default) = getkey(d.io, key, default)
-Base.get!(f::Function, d::ImageStreamMeta, key) = get!(f, d.io, key)
 
 
 # array like interface
@@ -49,8 +30,31 @@ Base.size(s::ImageStream, i::Int) = length(s.indices[i])
 
 Base.length(s::ImageStream) = prod(size(s))
 
+# AbstractDict Interface #
+Base.setindex!(d::ImageStream, val, key::String) = setindex!(properties(d), val, key)
+Base.getindex(d::ImageStream, key::String) = properties(d)[key]
+
+#Base.copy(d::ImageStream) = ImageFormat{F}(deepcopy(properties(d)))
+##Base.empty(d::ImageStream{F}) where F = ImageStream{F}()
+
+Base.delete!(d::ImageStream, k::String) = (delete!(properties(d), k); d)
+Base.empty!(d::ImageStream) = (empty!(properties(d)); d)
+Base.isempty(d::ImageStream) = isempty(properties(d))
+
+Base.in(item, d::ImageStream) = in(item, properties(d))
+
+Base.pop!(d::ImageStream, key, default) = pop!(properties(d), key, default)
+Base.pop!(d::ImageStream, key) = pop!(properties(d), key)
+Base.push!(d::ImageStream, kv::Pair) = insert!(properties(d), kv)
+Base.push!(d::ImageStream, kv) = push!(properties(d), kv)
+
+Base.haskey(d::ImageStream, k::String) = haskey(properties(d), k)
+Base.keys(d::ImageStream) = keys(properties(d))
+Base.getkey(d::ImageStream, key, default) = getkey(properties(d), key, default)
+Base.get!(f::Function, d::ImageStream, key) = get!(f, properties(d), key)
+
 # I/O Interface #
-FileIO.stream(s::ImageStream{T,I,IOType}) where {T,I,IOType} = s.io::IOType
+FileIO.stream(s::ImageStream) = s.io
 
 Base.seek(s::ImageStream, n::Integer) = seek(stream(s), n)
 Base.position(s::ImageStream)  = position(stream(s))
@@ -96,7 +100,7 @@ end
 end
 
 read(s::ImageStream, sink::Type{A}; kwargs...) where A<:ImageMeta =
-    ImageMeta(read(s, fieldtype(A, :data); kwargs...), s.io.properties)
+    ImageMeta(read(s, fieldtype(A, :data); kwargs...), properties(s))
 
 read(s::ImageStream, sink::Type{A}; kwargs...) where A<:AxisArray =
     AxisArray(read(s, fieldtype(A, :data); kwargs...), Base.axes(s))
