@@ -16,7 +16,6 @@ using AxisArrays: axisnames, permutation, AxisArray
 using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
       Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
 
-import ImageMetadata: @get
 import GeometryTypes: Triangle, Point
 import Rotations: Quat
 import AxisArrays: axisnames, permutation, AxisArray

@@ -4,13 +4,13 @@ const MetaArray{T,N} = ImageMeta{T,N,Array{T,N}}
 function readhdr(io::IO)
     ret = read(io, Int32)
     if ret == Int32(348)
-        readhdr1(IOMeta{:NII}(io, needswap=false))
+        readhdr1(IOMeta(io, ImageProperties{:NII}()))
     elseif ret == Int32(540)
-        readhdr2(IOMeta{:NII}(io, needswap=false))
+        readhdr2(IOMeta(io, ImageProperties{:NII}()))
     elseif ret == ntoh(Int32(348))
-        readhdr1(IOMeta{:NII}(io, needswap=true))
+        readhdr1(IOMeta(SwapStream(io), ImageProperties{:NII}()))
     elseif ret == ntoh(Int32(540))
-        readhdr2(IOMeta{:NII}(io, needswap=true))
+        readhdr2(IOMeta(SwapStream(io, needswap=true), ImageProperties{:NII}()))
     else
         error("Not a supported NIfTI format")
     end
@@ -113,7 +113,7 @@ function readhdr1(s::IOMeta)
 
     skip(s, (7-N)*4)  # skip filler dims
 
-    s["data_offset"] = read(s, Float32)
+    s["data_offset"] = Int(read(s, Float32))
     s["header"]["scaleslope"] = read(s, Float32)
     s["header"]["scaleintercept"] = read(s, Float32)
     s["header"]["sliceend"] = read(s, Int16)

@@ -3,13 +3,13 @@ auxfile(d)
 
 Retrieves string for auxiliary file associated with the image.
 """
-auxfile(d::ImageProperties) = get(d, "auxfile", "")
+auxfile(d::ImageProperties) = @get d "auxfile" ""
 auxfile(A::AbstractArray) = ""
 
 """
     data_offset(d)
 """
-data_offset(d::ImageProperties) = get(d, "data_offset", 0)
+data_offset(d::ImageProperties) = get(d, "data_offset", 0)::Int
 data_offset(A::AbstractArray) = 0
 
 """
@@ -23,14 +23,14 @@ filenames(A::AbstractArray) = String[]
 """
     modality(d)
 """
-modality(d::ImageProperties) = get(d, "modality", "")
-modality(A::AbstractArray) = ""
+modality(d::ImageProperties) = get(d, "modality", "")::String
+modality(a::AbstractArray) = ""
 
 """
     header(d)
 """
-header(d::ImageProperties) = get(d, "header", :NOTHING)
-header(A::AbstractArray) = :NOTHING
+header(d::ImageProperties) = get(d, "header", nothing)
+header(a::AbstractArray) = nothing
 
 """
 description(d)
@@ -38,7 +38,7 @@ description(d)
 Retrieves description field that may say whatever you like.
 """
 description(d::ImageProperties) = get(d, "description", "")
-description(A::AbstractArray) = ""
+description(a::AbstractArray) = ""
 
 """
     calmax
@@ -47,35 +47,34 @@ Specifies maximum element for display puproses
 
 """
 calmax(d::ImageProperties) = get(d, "calmax", 1)
-calmax(A::AbstractArray{T}) where T = typemax(t)
+calmax(a::AbstractArray{T}) where T = typemax(a)
 
 """
     calmin
 
 Specifies minimum element for display puproses
 """
-calmin(img::ImageProperties) = get(d, "calmax", -1)
-calmin(A::AbstractArray{T}) where T = typemin(t)
+calmin(d::ImageProperties) = get(d, "calmax", -1)
+calmin(a::AbstractArray{T}) where T = typemin(a)
 
+# this allows 
 function metafy(::Type{T}) where T
     @eval begin
-        if any(fieldnames(Dict) .== :properties)
-            auxfile(d::$T) = auxfile(getfield(d, :properties))
-            header(d::$T) = header(getfield(d, :properties))
-            description(d::$T) = description(getfield(d, :properties))
-            data_offset(d::$T) = data_offset(getfield(d, :properties))
-            modality(d::$T) = modality(getfield(d, :properties))
-            calmax(d::$T) = calmax(getfield(d, :properties))
-            calmin(d::$T) = calmin(getfield(d, :properties))
-        else
-            auxfile(d::$T) = d["auxfile"]
-            header(d::$T) = d["header"]
-            description(d::$T) = d["description"]
-            data_offset(d::$T) = d["data_offset"]
-            modality(d::$T) = d["modality"]
-            calmax(d::$T) = d["calmax"]
-            calmin(d::$T) = d["calmin"]
-        end
+        Base.get(d::$T, k::String, v) = get(properties(d), k, v)
+        Base.get!(f::Function, d::$T, key::String) = get!(f, properties(d), key)
+        Base.setindex!(d::$T, val, key::String) = setindex!(properties(d), val, key)
+        Base.getindex(d::$T, key::String) = getindex(properties(d), key)
+        Base.haskey(d::$T, k::String) = haskey(properties(d), k)
+        Base.keys(d::$T) = keys(properties(d))
+
+
+        auxfile(d::$T) = auxfile(properties(d))
+        header(d::$T) = header(properties(d))
+        description(d::$T) = description(properties(d))
+        data_offset(d::$T) = data_offset(properties(d))
+        modality(d::$T) = modality(properties(d))
+        calmax(d::$T) = calmax(properties(d))
+        calmin(d::$T) = calmin(properties(d))
     end
 end
 
@@ -87,7 +86,7 @@ metafy(ImageStream)
 
 Returns the axis associated with each spatial dimension.
 """
-spataxes(A::AbstractArray) = map(i->AxisArrays.axes(a, i), coords_spatial(A))
+spataxes(a::AbstractArray) = map(i->AxisArrays.axes(a, i), coords_spatial(a))
 
 """
     spatunits(img)
@@ -95,7 +94,7 @@ spataxes(A::AbstractArray) = map(i->AxisArrays.axes(a, i), coords_spatial(A))
 Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If
 not available `nothing` is returned for each spatial axis.
 """
-spatunits(A::AbstractArray) = map(i->unit(i.val[1]), spataxes(img))
+spatunits(a::AbstractArray) = map(i->unit(i.val[1]), spataxes(a))
 
 """
     timeunits(img)
@@ -103,8 +102,8 @@ spatunits(A::AbstractArray) = map(i->unit(i.val[1]), spataxes(img))
 Returns the units (i.e. Unitful.unit) the time axis is measured in. If not
 available `nothing` is returned.
 """
-function timeunits(A::AbstractArray)
-    ta = timeaxis(A)
+function timeunits(a::AbstractArray)
+    ta = timeaxis(a)
     if ta == nothing
         return nothing
     else

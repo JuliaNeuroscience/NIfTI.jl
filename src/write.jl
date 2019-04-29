@@ -1,5 +1,35 @@
 # TODO:
-# niupdate!
+# Should probably update the qform stuff too
+# (although a lot of software seems to just skip this)
+
+function niwrite(f::String, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    atransformed = nieltransform(A)
+    s = ImageStream(f, atransformed; copyprops=copyprops)
+
+    if version == 1
+        writehdr1(s)
+    else
+        writehdr1(s)
+    end
+    write(s, atransformed)
+end
+
+function niprops(A::AbstractArray)
+    p = ImageProperties{:NII}()
+    p["spacedirections"] = spacedirections(A)
+end
+
+
+function niprops(A::ImageMeta)
+end
+
+function niprops(A::ImageFormat{:NII})
+end
+
+
+nieltransform(A::AbstractArray{<:BitTypes}) = A
+nieltransform(A::AbstractArray{T}) where T =
+    error("NIfTI.jl current doesn't support writing arrays of eltype $T.")
 
 function voxoffset(A::AbstractArray, v::Val{1})
     if isempty(extension(A))
@@ -110,7 +140,6 @@ function writehdr2(s::ImageStream{T}) where T
     write(s, Float64(toffset(s)))                    # toffset::Float64
     write(s, Int64(slicestart(s)))                   # slice_start::Int64
     write(s, Int64(sliceend(s)))                     # slice_end::Int64
-                            
     descrip = description(s)                         # descrip::NTuple{80,UInt8}
     if length(descrip) > 80
         write(s, codeunits(descrip[1:80]))
@@ -119,7 +148,7 @@ function writehdr2(s::ImageStream{T}) where T
     end
 
     aux = auxfile(s)  
-    if length(aux) > 24                                     # aux_file::NTuple{24,UInt8}
+    if length(aux) > 24                                      # aux_file::NTuple{24,UInt8}
         write(s, codeunits(aux[1:80]))
     else
         write(s, aux*String(fill(UInt8(0),24-length(aux))))

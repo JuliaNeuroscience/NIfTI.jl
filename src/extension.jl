@@ -8,6 +8,7 @@ mutable struct NiftiExtension
     edata::Vector{UInt8}
 end
 
+# hi juliaString ctermfg orange
 const NiftiEcode = Dict{Int16, Symbol}([
     (Int16(0), :Ignore),
     (Int16(2), :DICOM),
@@ -101,7 +102,7 @@ function extension(img::ImageMeta)
 end
 extension(A::AbstractArray) = NiftiExtension[]
 
-function read(io::IOMeta{F}, ::Type{NiftiExtension}) where F
+function read(io::IOMeta, ::Type{NiftiExtension})
     ret = NiftiExtension[]
     if eof(io)
         return ret

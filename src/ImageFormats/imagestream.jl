@@ -30,10 +30,6 @@ Base.size(s::ImageStream, i::Int) = length(s.indices[i])
 
 Base.length(s::ImageStream) = prod(size(s))
 
-# AbstractDict Interface #
-Base.setindex!(d::ImageStream, val, key::String) = setindex!(properties(d), val, key)
-Base.getindex(d::ImageStream, key::String) = properties(d)[key]
-
 #Base.copy(d::ImageStream) = ImageFormat{F}(deepcopy(properties(d)))
 ##Base.empty(d::ImageStream{F}) where F = ImageStream{F}()
 
@@ -48,8 +44,6 @@ Base.pop!(d::ImageStream, key) = pop!(properties(d), key)
 Base.push!(d::ImageStream, kv::Pair) = insert!(properties(d), kv)
 Base.push!(d::ImageStream, kv) = push!(properties(d), kv)
 
-Base.haskey(d::ImageStream, k::String) = haskey(properties(d), k)
-Base.keys(d::ImageStream) = keys(properties(d))
 Base.getkey(d::ImageStream, key, default) = getkey(properties(d), key, default)
 Base.get!(f::Function, d::ImageStream, key) = get!(f, properties(d), key)
 

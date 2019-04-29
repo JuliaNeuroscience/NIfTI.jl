@@ -33,11 +33,6 @@ Base.pop!(d::IOMeta, key) = pop!(d.properties, key, Base.secret_table_token)
 Base.push!(d::IOMeta, kv::Pair) = insert!(d, kv[1], kv[2])
 Base.push!(d::IOMeta, kv) = insert!(d.properties, kv[1], kv[2])
 
-Base.haskey(d::IOMeta, k::String) = haskey(d.properties, k)
-Base.keys(d::IOMeta) = keys(d.io)
-Base.getkey(d::IOMeta, key, default) = getkey(d.properties, key, default)
-Base.get!(f::Function, d::IOMeta, key::String) = get!(f, d.properties, key)
-
 #Base.iterate(d::IOMeta) = iterate(d.properties)
 #Base.iterate(d::IOMeta, state) = iterate(d.properties, state)
 #Base.length(d::IOMeta) = length(d.properties)
