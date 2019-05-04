@@ -7,8 +7,16 @@ end
 ImageStream{T}(io::IOMeta{IOType}, indices::I) where {T,I,IOType} =
     ImageStream{T,I,IOType}(stream(io), indices, properties(io))
 
-function ImageStream(f, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
-    ImageStream{T}(open(f, mode), AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+ImageStream{T}(io::IOType, indices::I, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,I,IOType<:IO} =
+    ImageStream{T,I,IOType}(io, indices, ImageProperties(properties; copyprops=copyprops))
+
+ImageStream(io::IOType, A::AbstractArray{T}; copyprops::Bool=false) where {T,I,IOType} =
+    ImageStream{T,typeof(AxisArrays.axes(A)),IOType}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+
+function ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
+    open(f, mode) do io
+        ImageStream{T,typeof(AxisArrays.axes(A)),typeof(io)}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+    end
 end
 
 ImageMetadata.properties(s::ImageStream) = s.properties
@@ -16,6 +24,7 @@ ImageMetadata.copyproperties(s::ImageStream, io::IOType) where IOType =
      ImageStream(io, deepcopy(properties(s)))
 ImageMetadata.shareproperties(s::ImageStream, io::IOType) where IOType =
     ImageStream(io, properties(s))
+ImageCore.spacedirections(s::ImageStream) = @get s "spacedirections" ImageCore._spacedirections(s)
 
 
 # array like interface
@@ -25,10 +34,43 @@ Base.eltype(s::ImageStream{T,I}) where {T,I} = length(I.parameters)
 Base.axes(s::ImageStream) = s.indices
 Base.axes(s::ImageStream, i::Int) = s.indices[i]
 
-Base.size(s::ImageStream) = length.(Base.axes(s))
+Base.size(s::ImageStream) = length.(axes(s))
 Base.size(s::ImageStream, i::Int) = length(s.indices[i])
 
 Base.length(s::ImageStream) = prod(size(s))
+
+AxisArrays.axisnames(s::ImageStream{T,I}) where {T,I} = axisnames(I)
+AxisArrays.axisvalues(s::ImageStream) = axisvalues(axes(s)...)
+
+ImageCore.spatialorder(s::ImageStream) = ImageAxes.filter_space_axes(axes(s), axisnames(s))
+ImageCore.size_spatial(s::ImageStream)    = ImageAxes.filter_space_axes(axes(s), size(s))
+ImageCore.indices_spatial(s::ImageStream) = ImageAxes.filter_space_axes(axes(s), axes(s))
+
+ImageCore.coords_spatial(s::ImageStream{T,I}) where {T,I} =
+    ImageAxes.filter_space_axes(axes(s), ntuple(identity, Val(length(I.parameters))))
+ImageCore.sdims(s::ImageStream) = length(coords_spatial(s))
+ImageCore.pixelspacing(s::ImageStream) = map(step, ImageAxes.filter_space_axes(axes(s), axisvalues(s)))
+
+# TODO: should probably not export underscores in future
+ImageAxes.timeaxis(s::ImageStream) = ImageAxes._timeaxis(axes(s)...)
+ImageAxes.nimages(s::ImageStream) = ImageAxes._nimages(timeaxis(s))
+function ImageAxes.assert_timedim_last(s::ImageStream)
+    istimeaxis(axes(s)[end]) || error("time dimension is not last")
+end
+
+ImageAxes.timedim(s::ImageStream{T,I}) where {T,I} =
+    ImageAxes._timedim(ImageAxes.filter_time_axis(axes(s), ntuple(identity, Val(length(I.parameters)))))
+
+function ImageAxes.colordim(s::ImageStream)
+    d = ImageAxes._colordim(1, axes(s))
+    d > ndims(s) ? 0 : d
+end
+
+#=
+TimeAxis,
+HasTimeAxis,
+
+=#
 
 #Base.copy(d::ImageStream) = ImageFormat{F}(deepcopy(properties(d)))
 ##Base.empty(d::ImageStream{F}) where F = ImageStream{F}()
@@ -97,7 +139,7 @@ read(s::ImageStream, sink::Type{A}; kwargs...) where A<:ImageMeta =
     ImageMeta(read(s, fieldtype(A, :data); kwargs...), properties(s))
 
 read(s::ImageStream, sink::Type{A}; kwargs...) where A<:AxisArray =
-    AxisArray(read(s, fieldtype(A, :data); kwargs...), Base.axes(s))
+    AxisArray(read(s, fieldtype(A, :data); kwargs...), axes(s))
 
 const AxisSArray{T,N,Ax} = AxisArray{T,N,<:StaticArray,Ax}
 const AxisDArray{T,N,Ax} = AxisArray{T,N,<:Array,Ax}
@@ -107,26 +149,21 @@ const ImageSAxes{T,N,Ax} = ImageMeta{T,N,<:AxisSArray{T,N,Ax}}
 
 read(s::ImageStream) = read(s, ImageDAxes)
 
+write(s::ImageStream, img::ImageMeta) = write(s, img.data)
+write(s::ImageStream, a::AxisArray) = write(s, a.data)
+write(s::ImageStream, x::AbstractArray) = write(stream(s), x)
+
+write(s::ImageStream, x::Real) where T = write(stream(s), x)
+write(s::ImageStream, x::String) = write(stream(s), x)
+
+# this is a separate function to handle writing the actual image data versus metadata
+#function imagewrite() end
+
+
 # this will help with batch reading or possible implementations of CLI such as fslmerge
 #function readcat(f::Vector{<:AbstractString}; dims::Int) end
 
 # this will allow chunkwise reading of images
 # function readchunk() end
 
-#= TODO: These are what I'd like supported here
-ImageAxes.timeaxis(img::ImageMetaAxis) = timeaxis(data(img))
-ImageAxes.timedim(img::ImageMetaAxis) = timedim(data(img))
-ImageAxes.colordim(img::ImageMetaAxis) = colordim(data(img))
-ImageCore.pixelspacing(img::ImageMeta) = pixelspacing(data(img))
 
-istimeaxis,
-TimeAxis,
-HasTimeAxis,
-sdims
-coords_spatial
-nimages
-size_spatial
-indices_spatial
-assert_timedim_last
-spatialorder
-=#

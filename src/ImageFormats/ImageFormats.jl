@@ -1,6 +1,6 @@
 module ImageFormats
 
-using FileIO, StaticArrays, AxisArrays, ImageMetadata, ImageAxes, MappedArrays
+using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays
 using Unitful: unit
 using GeometryTypes: Point
 using Rotations: Quat
@@ -8,6 +8,8 @@ using Distributions: TDist,Chi,Chisq,Poisson,FDist,Beta,Binomial,Gamma,Normal,
                      NoncentralT,NoncentralChisq,Logistic,Uniform,NoncentralF,
                      GeneralizedExtremeValue,Distribution
 
+import AxisArrays
+import AxisArrays: AxisArray, Axis, axisnames, axisvalues, axisnames
 import Base: read, read!, write
 
 export ImageFormat,

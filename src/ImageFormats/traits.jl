@@ -47,15 +47,15 @@ Specifies maximum element for display puproses
 
 """
 calmax(d::ImageProperties) = get(d, "calmax", 1)
-calmax(a::AbstractArray{T}) where T = typemax(a)
+calmax(a::AbstractArray{T}) where T = maximum(a)
 
 """
     calmin
 
 Specifies minimum element for display puproses
 """
-calmin(d::ImageProperties) = get(d, "calmax", -1)
-calmin(a::AbstractArray{T}) where T = typemin(a)
+calmin(d::ImageProperties) = get(d, "calmin", -1)
+calmin(a::AbstractArray{T}) where T = minimum(a)
 
 # this allows 
 function metafy(::Type{T}) where T
@@ -87,6 +87,8 @@ metafy(ImageStream)
 Returns the axis associated with each spatial dimension.
 """
 spataxes(a::AbstractArray) = map(i->AxisArrays.axes(a, i), coords_spatial(a))
+spataxes(s::ImageStream) = map(i->axes(s, i), coords_spatial(s))
+
 
 """
     spatunits(img)
@@ -94,7 +96,7 @@ spataxes(a::AbstractArray) = map(i->AxisArrays.axes(a, i), coords_spatial(a))
 Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If
 not available `nothing` is returned for each spatial axis.
 """
-spatunits(a::AbstractArray) = map(i->unit(i.val[1]), spataxes(a))
+spatunits(a::Union{AbstractArray,ImageStream}) = map(i->unit(i.val[1]), spataxes(a)) # TODO: handle non unitful
 
 """
     timeunits(img)
@@ -102,7 +104,7 @@ spatunits(a::AbstractArray) = map(i->unit(i.val[1]), spataxes(a))
 Returns the units (i.e. Unitful.unit) the time axis is measured in. If not
 available `nothing` is returned.
 """
-function timeunits(a::AbstractArray)
+function timeunits(a::Union{AbstractArray,ImageStream})
     ta = timeaxis(a)
     if ta == nothing
         return nothing

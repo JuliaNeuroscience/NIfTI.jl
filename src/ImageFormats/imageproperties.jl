@@ -23,11 +23,37 @@ julia>
 struct ImageProperties{sym} <: AbstractDict{String,Any}
     properties::AbstractDict{String,Any}
 
-    ImageProperties(d::AbstractDict{String,Any}) = new{:NOTHING}(d)
-    ImageProperties{sym}(d::AbstractDict{String,Any}) where {sym} = new{sym}(d)
+    function ImageProperties(d::AbstractDict{String,Any}; copyprops::Bool=false)
+        if copyprops
+            new{:NOTHING}(deepcopy(d))
+        else
+            new{:NOTHING}(d)
+        end
+    end
 
-    ImageProperties(d::ImageProperties{sym}) where sym = new{sym}(properties(d))
-    ImageProperties{sym}(d::AbstractDict{sym}) where sym = new{sym}(properties(d))
+    function ImageProperties{sym}(d::AbstractDict{String,Any}; copyprops::Bool=false) where {sym}
+        if copyprops
+            new{sym}(deepcopy(d))
+        else
+            new{sym}(d)
+        end
+    end
+
+    function ImageProperties{symnew}(d::ImageProperties{sym}; copyprops::Bool=false) where {sym,symnew}
+        if copyprops
+            new{sym}(deepcopy(d))
+        else
+            new{sym}(d)
+        end
+    end
+
+    function ImageProperties(d::ImageProperties{sym}; copyprops::Bool=false) where sym
+        if copyprops
+            new{sym}(deepcopy(properties(d)))
+        else
+            new{sym}(properties(d))
+        end
+    end
 end
 
 ImageProperties() = ImageProperties{:Nothing}()
@@ -45,17 +71,33 @@ end
 
 function ImageProperties(img::ImageMeta; copyprops::Bool=false)
     if copyprops
-        ImageProperties(deepcopy(properties(img)))
+        _add_spacedirections(ImageProperties(deepcopy(properties(img))), img)
     else
-        ImageProperties(properties(img))
+        _add_spacedirections(ImageProperties(properties(img)), img)
     end
 end
 
 function ImageProperties{sym}(img::ImageMeta; copyprops::Bool=false) where sym
     if copyprops
-        ImageProperties{sym}(deepcopy(properties(img)))
+        _add_spacedirections(ImageProperties{sym}(deepcopy(properties(img))), img)
     else
-        ImageProperties{sym}(properties(img))
+        _add_spacedirections(ImageProperties{sym}(properties(img)), img)
+    end
+end
+
+ImageProperties(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}()) =
+    _add_spacedirections(ImageProperties(props), a)
+
+ImageProperties{sym}(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}()) where sym =
+    _add_spacedirections(ImageProperties{sym}(props), a)
+
+
+function _add_spacedirections(p::ImageProperties, A::AbstractArray)
+    if haskey(p, "spacedirections")
+        return p
+    else
+        p["spacedirections"] = spacedirections(A)
+        return p
     end
 end
 
