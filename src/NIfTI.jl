@@ -6,12 +6,6 @@ using GZip, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
 
 import Base: read, write
 
-using GeometryTypes: Triangle, Point
-using Rotations: Quat
-using AxisArrays: axisnames, permutation, AxisArray
-
-
-
 # using GeometryTypes
 using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
       Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
@@ -25,6 +19,7 @@ import Base64
 
 include("ImageFormats/ImageFormats.jl")
 using .ImageFormats
+using .ImageFormats: @get
 
 include("dictionaries.jl")
 include("traits.jl")

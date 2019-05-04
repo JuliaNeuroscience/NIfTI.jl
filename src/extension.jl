@@ -9,30 +9,29 @@ mutable struct NiftiExtension
 end
 
 # hi juliaString ctermfg orange
-const NiftiEcode = Dict{Int16, Symbol}([
-    (Int16(0), :Ignore),
-    (Int16(2), :DICOM),
-    (Int16(4), :AFNI),
-    (Int16(6), :Comment),
-    (Int16(8), :XCEDE),
-    (Int16(10), :JimDimInfo),
-    (Int16(12), :WorkflowFWDS),
-    (Int16(14), :Freesurfer),
-    (Int16(16), :PyPickly),
-    (Int16(18), :MindIdent),
-    (Int16(20), :BValue),
-    (Int16(22), :SphericalDirection),
-    (Int16(24), :DTComponent),
-    (Int16(26), :SHCDegreeOrder),
-    (Int16(28), :Voxbo),
-    (Int16(30), :Caret),
-    (Int16(32), :CIfTI),
-    (Int16(34), :VariableFrameTiming),
-    (Int16(38), :Eval),
-    (Int16(40), :Matlab)
-])
+const NiftiEcode = Dict{Int,Symbol}(
+    0  => :Ignore,
+    2  => :DICOM,
+    4  => :AFNI,
+    6  => :Comment,
+    8  => :XCEDE,
+    10 => :JimDimInfo,
+    12 => :WorkflowFWDS,
+    14 => :Freesurfer,
+    16 => :PyPickly,
+    18 => :MindIdent,
+    20 => :BValue,
+    22 => :SphericalDirection,
+    24 => :DTComponent,
+    26 => :SHCDegreeOrder,
+    28 => :Voxbo,
+    30 => :Caret,
+    32 => :CIfTI,
+    34 => :VariableFrameTiming,
+    38 => :Eval,
+    40 => :Matlab)
 
-const NiftiEcodeReverse = Dict{Symbol,Int16}()
+const NiftiEcodeReverse = Dict{Symbol,Int}()
 for (k, v) in NiftiEcode
     NiftiEcodeReverse[v] = k
 end
@@ -65,14 +64,7 @@ NIfTI Extension Codes
 ecode(x::Int32) = get(NiftiEcode, x, :Ignore)
 ecode(x::NiftiExtension) = x.ecode
 ecode(x::Vector{NiftiExtension}) = map(ecode, x)
-function ecode(img::ImageMeta)
-    if haskey(img.properties, "nifti")
-        return ecode(get(img["nifti"], "extension", extension(data(img))))
-    else
-        return ecode(extension(data(img)))
-    end
-end
-
+ecode(img::ImageMeta) = ecode(extension(img))
 
 # Calculates the size of a NIfTI extension
 """
@@ -91,24 +83,20 @@ function esize(ex::NiftiExtension)
     end
 end
 
-
 # makes empty extension
-function extension(img::ImageMeta)
-    if haskey(img.properties, "nifti")
-        return get(img["nifti"], "extension", extension(data(img)))
-    else
-        return extension(data(img))
-    end
-end
+extension(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = extension(properties(img))
+extension(s::ImageStream) = extension(properties(s))
+extension(p::ImageProperties{:NII}) =  get(header(p), "extension", NiftiExtension[])
 extension(A::AbstractArray) = NiftiExtension[]
+
 
 function read(io::IOMeta, ::Type{NiftiExtension})
     ret = NiftiExtension[]
     if eof(io)
         return ret
     else
-        extension = read!(io, Array{UInt8}(undef, 4))
-        if extension[1] == 0
+        ext = read!(io, Array{UInt8}(undef, 4))
+        if ext[1] == 0
             return ret
         else
             counter = position(io)
@@ -129,10 +117,10 @@ function write(io::IO, x::Vector{NiftiExtension})
     else
         write(io, UInt8[1, 0, 0, 0])
         for ex in x
-            write(io, Int32(esize(x)))
-            write(io, Int32(get(NiftiEcodeReverse, ecode(x), 0)))
-            write(io, x.edata)
-            write(io, zeros(UInt8, esize(ex) - length(x.edata)))
+            write(io, Int32(esize(ex)))
+            write(io, Int32(get(NiftiEcodeReverse, ecode(ex), 0)))
+            write(io, ex.edata)
+#            write(io, zeros(UInt8, esize(ex) - length(ex.edata)))
         end
     end
 end

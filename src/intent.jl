@@ -76,7 +76,9 @@ for (k, v) in NiftiIntents
     NiftiIntentsReverse[v] = k
 end
 
-intent(img::ImageFormat{:NII}) = img["header"]["intent"]
+intent(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intent(properties(img))
+intent(s::ImageStream) = intent(properties(s))
+intent(p::ImageProperties) = get(header(p), "intent", NoIntent)
 intent(A::AbstractArray{T}) where {T<:BitTypes} = NoIntent
 
 intent(A::AbstractArray{<:RGB}) = NoIntent
@@ -106,13 +108,25 @@ intent(A::AbstractVector{<:RGBA}) = GiftiRGBA
     intentname(img)
 """
 intentname(img::ImageFormat{format"NII"}) = img["header"]["intentname"]
-intentname(A::AbstractArray) = String(fill(UInt8(0), 16))
+
+
+intentname(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentname(properties(img))
+intentname(s::ImageStream) = intentname(properties(s))
+intentname(p::ImageProperties) = get(header(p), "intentname", intentname())::String
+intentname(A::AbstractArray) = intentname()
+intentname() = String(fill(UInt8(0), 16))
+
+
+
 
 """
     intentparams(img)
 """
-intentparams(img::ImageFormat{format"NII"}) = img["header"]["intentparams"]
-intentparams(A::AbstractArray) = [0.0, 0.0, 0.0]
+intentparams(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentparams(properties(img))
+intentparams(s::ImageStream) = intentparams(properties(s))
+intentparams(p::ImageProperties{:NII}) = get(header(p), "intentparams", Float64[0, 0, 0])::Tuple{Float64,Float64,Float64}
+intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
+
 # array dimensions are in row major form
 intentparams(A::AbstractArray{<:AbstractMatrix}) = (Float64(size(A,2)), Float64(size(A,1)), Float64(0.0))
 

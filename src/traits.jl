@@ -15,69 +15,101 @@ end
 """
     scaleslope
 """
-scaleslope(img::ImageFormat{format"NII"}) = img["header"]["scaleslope"]
-scaleslope(A::AbstractArray) = 1
+scaleslope(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = scaleslope(properties(img))
+scaleslope(s::ImageStream) = scaleslope(properties(s))
+scaleslope(p::ImageProperties) = get(header(p), "scaleslope", float(1))::AbstractFloat
+scaleslope(A::AbstractArray) = float(1)
 
 """
     scaleintercept
 """
-scaleintercept(img::ImageFormat{format"NII"}) = img["header"]["scaleintercept"]
-scaleintercept(A::AbstractArray) = 0
+scaleintercept(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = scaleintercept(properties(img))
+scaleintercept(s::ImageStream) = scaleintercept(properties(s))
+scaleintercept(p::ImageProperties) = get(header(p), "scaleintercept", float(0))::AbstractFloat
+scaleintercept(A::AbstractArray) = float(0)
 
-diminfo(img::ImageFormat{format"NII"}) = img["header"]["diminfo"]
+
+# dimension info for nifti header
+diminfo(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = diminfo(properties(img))
+diminfo(p::ImageProperties{:NII}) = get(header(p), "diminfo", Int8(0))
+
 diminfo(A::AbstractArray) = Int8(0)
+diminfo(s::ImageStream) = diminfo(properties(s))
 
 """
     frequencydim
+
+```jldoctest
+julia> using NIfTI, ImageMetadata
+
+julia> p = ImageProperties{:NII}();
+
+julia> p["header"] = Dict{String,Any}("diminfo" => Int8(57))
+
+julia> img = ImageMeta(rand(4,4), p)
+
+julia> frequencydim(img)
+1
+
+julia> phasedim(img)
+2
+
+julia> slicedim(img)
+3
+```
 """
-frequencydim(s::AbstractArray) = (diminfo(s) >> 4) & Int8(3)
+frequencydim(s) = diminfo(s)::Int8 & Int8(3)
 
 """
     phasedim
 """
-phasedim(s::AbstractArray) = (diminfo(s) >> 4) & Int8(3)
+phasedim(s) = (diminfo(s) >> 2) & Int8(3)
 
 """
     slicedim
 """
-slicedim(s::AbstractArray) = (diminfo(s) >> 4) & Int8(3)
+slicedim(s) = diminfo(s) >> 4
 
 """
     slicecode
 """
-slicecode(img::ImageFormat{format"NII"}) = img["header"]["slicecode"]
+slicecode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = slicecode(properties(img))
+slicecode(s::ImageStream) = slicecode(properties(s))
+slicecode(p::ImageProperties) = get(header(p), "slicecode", "Unkown")::String
 slicecode(A::AbstractArray) = "Unkown"
 
 """
     sliceduration
 """
-sliceduration(img::ImageFormat{format"NII"}) = img["header"]["sliceduration"]
-sliceduration(A::AbstractArray) = 0
+sliceduration(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sliceduration(properties(img))
+sliceduration(s::ImageStream) = sliceduration(properties(s))
+sliceduration(p::ImageProperties) = get(header(p), "sliceduration", float(0))::AbstractFloat
+sliceduration(A::AbstractArray) = float(0)
 
 """
     slicestart
 """
-slicestart(img::ImageFormat{format"NII"}) = img["header"]["slicestart"]
+slicestart(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = slicestart(properties(img))
+slicestart(s::ImageStream) = slicestart(properties(s))
+slicestart(p::ImageProperties) = get(header(p), "slicestart", 0)
 slicestart(A::AbstractArray) = 0
 
 """
     sliceend
 """
-sliceend(img::ImageFormat{format"NII"}) = img["header"]["sliceend"]
+sliceend(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sliceend(properties(img))
+sliceend(s::ImageStream) = sliceend(properties(s))
+sliceend(p::ImageProperties) = get(header(p), "slicestart", 0)
 sliceend(A::AbstractArray) = 0
 
 """
     qform(img)
 """
-function qform(img::ImageMeta)
-    if haskey(properties(img), "nifti")
-        return get(img["nifti"], "qform", qform(data(img)))
-    else
-        return qform(data(img))
-    end
-end
-
-function qform(A::AbstractArray)
+qform(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = qform(properties(img))
+qform(s::ImageStream) = qform(properties(s))
+qform(p::ImageProperties) = get(header(p), "qform", qform())
+qform(A::AbstractArray) = qform()
+function qform()
     SMatrix{4,4,Float64,16}(1.0, 0.0, 0.0, 0.0,
                             0.0, 1.0, 0.0, 0.0,
                             0.0, 0.0, 1.0, 0.0,
@@ -88,22 +120,80 @@ end
     sform(A)
 """
 # may just drop sform as property and always grab from spacedirections in future
-function sform(img::ImageMeta)
-    sd = spacedirections(img)
+sform(img::Union{AbstractArray,ImageStream}) = _sform(spacedirections(img))
+function _sform(sd::AbstractMatrix)
     SMatrix{4,4,eltype(sd),16}(sd[1,:]...,    0.0,
                                sd[2,:]...,    0.0,
                                sd[3,:]...,    0.0,
                                0.0, 0.0, 0.0, 1.0)
 end
 
+function _sform(sd::Tuple{Ax1,Ax2,Ax3}) where {Ax1,Ax2,Ax3}
+    SMatrix{4,4,eltype(Ax1),16}(sd[1]...,      0.0,
+                               sd[2]...,      0.0,
+                               sd[3]...,      0.0,
+                               0.0, 0.0, 0.0, 1.0)
+end
+
 """
 qformcode
 """
-qformcode(img::ImageFormat{format"NII"}) = img["header"]["qformcode"]
+qformcode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = qformcode(properties(img))
+qformcode(s::ImageStream) = qformcode(properties(s))
+qformcode(p::ImageProperties) = get(header(p), "qformcode", :Unkown)
 qformcode(A::AbstractArray) = :Unkown
 
 """
 sformcode
 """
-sformcode(img::ImageFormat{format"NII"}) = img["header"]["sformcode"]
+sformcode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sformcode(properties(img))
+sformcode(s::ImageStream) = sformcode(properties(s))
+sformcode(p::ImageProperties) = get(header(p), "sformcode", :Unkown)
 sformcode(A::AbstractArray) = :Unkown
+
+# these are for internal use in writing nifti headers
+
+function voxoffset(s::ImageStream, v::Val{1})
+    if isempty(extension(s))
+        SIZEOF_HDR1 + 4
+    else
+        mapreduce(esize, +, extension(s)) + SIZEOF_HDR1 + 4
+    end
+end
+
+function voxoffset(s::ImageStream, v::Val{2})
+    if isempty(extension(s))
+        SIZEOF_HDR2+4
+    else
+        mapreduce(esize, +, extension(s))+SIZEOF_HDR2+4
+    end
+end
+
+# Gets dim to be used in header
+function nidim(x::ImageStream)
+    dim = ones(Int16, 8)
+    dim[1] = ndims(x)
+    dim[2:dim[1]+1] = [size(x)...]
+    return dim
+end
+
+function pixdim(s::ImageStream)
+    pd = fill(1.0, 8)
+    # TODO: check on first pixdim measures
+    pd[1] = -1
+    pd[2:ndims(s)+1] = [map(i->ustrip(step(i.val)), axes(s))...]
+    return pd
+end
+
+function xyztunits(s::ImageStream)
+    (get(NiftiUnitsReverse, spatunits(s)[1], Int16(0)) & 0x07) |
+    (get(NiftiUnitsReverse,    timeunits(s), Int16(0)) & 0x38)
+end
+
+function toffset(s::ImageStream{T,I}) where {T,I}
+    if length(I.parameters) < 4
+        return 0
+    else
+        ustrip(timeaxis(s)[1])
+    end
+end

@@ -100,7 +100,7 @@ function readhdr1(s::IOMeta)
     skip(s, (7-N)*2)  # skip filler dims
 
     # intent parameters
-    s["header"]["intentparams"] = (read!(s, Vector{Int32}(undef, 3))...,)
+    s["header"]["intentparams"] = (float.(read!(s, Vector{Int32}(undef, 3)))...,)
     s["header"]["intent"] = get(NiftiIntents, read(s, Int16), NoIntent)
     T = get(NiftiDatatypes, read(s, Int16), UInt8)
 
@@ -145,9 +145,13 @@ function readhdr1(s::IOMeta)
     s["header"]["magic"] = (read(s, 4)...,)
 
     if s["header"]["sformcode"] ==  :Unkown
-        s["spacedirections"] = s["header"]["qform"][1:3,1:3]
+        s["spacedirections"] = (Tuple(s["header"]["qform"][1,1:3]),
+                                Tuple(s["header"]["qform"][2,1:3]),
+                                Tuple(s["header"]["qform"][3,1:3]))
     else
-        s["spacedirections"] = s["header"]["sform"][1:3,1:3]
+        s["spacedirections"] = (Tuple(s["header"]["sform"][1,1:3]),
+                                Tuple(s["header"]["sform"][2,1:3]),
+                                Tuple(s["header"]["sform"][3,1:3]))
     end
 
     s["header"]["extension"] = read(s, NiftiExtension)
@@ -202,9 +206,13 @@ function readhdr2(s::IOMeta)
     skip(s, 15)
 
     if s["header"]["sformcode"] ==  :Unkown
-        s["spacedirections"] = s["header"]["qform"][1:3,1:3]
+        s["spacedirections"] = (Tuple(s["header"]["qform"][1,1:3]),
+                                Tuple(s["header"]["qform"][2,1:3]),
+                                Tuple(s["header"]["qform"][3,1:3]))
     else
-        s["spacedirections"] = s["header"]["sform"][1:3,1:3]
+        s["spacedirections"] = (Tuple(s["header"]["sform"][1,1:3]),
+                                Tuple(s["header"]["sform"][2,1:3]),
+                                Tuple(s["header"]["sform"][3,1:3]))
     end
     s["header"]["extension"] = niread(s, NiftiExtension)
 
