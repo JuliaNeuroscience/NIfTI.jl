@@ -78,7 +78,11 @@ end
 
 intent(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intent(properties(img))
 intent(s::ImageStream) = intent(properties(s))
-intent(p::ImageProperties) = get(header(p), "intent", NoIntent)
+
+intent(p::ImageProperties) = intent(header(p))
+intent(p::ImageProperties{:header}) = @get p "intent" NoIntent
+intent(::Nothing) = NoIntent
+
 intent(A::AbstractArray{T}) where {T<:BitTypes} = NoIntent
 
 intent(A::AbstractArray{<:RGB}) = NoIntent
@@ -112,7 +116,12 @@ intentname(img::ImageFormat{format"NII"}) = img["header"]["intentname"]
 
 intentname(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentname(properties(img))
 intentname(s::ImageStream) = intentname(properties(s))
-intentname(p::ImageProperties) = get(header(p), "intentname", intentname())::String
+
+intentname(p::ImageProperties) = intentname(header(p))
+intentname(p::ImageProperties{:header}) = @get p "intentname" intentname() 
+intentname(::Nothing) = intentname()
+
+
 intentname(A::AbstractArray) = intentname()
 intentname() = String(fill(UInt8(0), 16))
 
@@ -124,8 +133,12 @@ intentname() = String(fill(UInt8(0), 16))
 """
 intentparams(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentparams(properties(img))
 intentparams(s::ImageStream) = intentparams(properties(s))
-intentparams(p::ImageProperties{:NII}) = get(header(p), "intentparams", Float64[0, 0, 0])::Tuple{Float64,Float64,Float64}
 intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
+
+intentparams(p::ImageProperties) = intentparams(header(p))
+intentparams(p::ImageProperties{:header}) = @get p "intentparams" Float64[0, 0, 0]
+intentparams(::Nothing) = Float64[0, 0, 0]
+
 
 # array dimensions are in row major form
 intentparams(A::AbstractArray{<:AbstractMatrix}) = (Float64(size(A,2)), Float64(size(A,1)), Float64(0.0))

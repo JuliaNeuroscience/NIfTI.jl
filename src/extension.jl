@@ -86,7 +86,7 @@ end
 # makes empty extension
 extension(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = extension(properties(img))
 extension(s::ImageStream) = extension(properties(s))
-extension(p::ImageProperties{:NII}) =  get(header(p), "extension", NiftiExtension[])
+extension(p::ImageProperties) = getheader(p, "extension", NiftiExtension[])
 extension(A::AbstractArray) = NiftiExtension[]
 
 

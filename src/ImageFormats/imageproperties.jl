@@ -60,14 +60,17 @@ ImageProperties() = ImageProperties{:Nothing}()
 ImageProperties{sym}() where {sym} = ImageProperties{sym}(Dict{String,Any}())
 
 struct IMNothing end   # to avoid confusion in the case where dict[key] === nothing
-macro get(d, k, default)
+macro get(p, k, default)
     quote
-        d, k = $(esc(d)), $(esc(k))
-        val = get(d.properties, k, IMNothing())
+        p, k = $(esc(p)), $(esc(k))
+        val = get(p.properties, k, IMNothing())
         return isa(val, IMNothing) ? $(esc(default)) : val
     end
 end
 
+getheader(p::ImageProperties, k::String, default) = getheader(header(p), k, default)
+getheader(p::ImageProperties{:header}, k::String, default) = @get p k default
+getheader(::Nothing, k::String, default) = default
 
 function ImageProperties(img::ImageMeta; copyprops::Bool=false)
     if copyprops
@@ -85,10 +88,10 @@ function ImageProperties{sym}(img::ImageMeta; copyprops::Bool=false) where sym
     end
 end
 
-ImageProperties(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}()) =
+ImageProperties(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}(); copyprops::Bool=false) =
     _add_spacedirections(ImageProperties(props), a)
 
-ImageProperties{sym}(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}()) where sym =
+ImageProperties{sym}(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}(); copyprops::Bool=false) where sym =
     _add_spacedirections(ImageProperties{sym}(props), a)
 
 

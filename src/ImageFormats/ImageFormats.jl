@@ -28,7 +28,8 @@ export ImageFormat,
        calmax,
        header,
        modality,
-       data_offset
+       data_offset,
+       getheader
 
 include("swapstreams.jl")
 include("imageproperties.jl")

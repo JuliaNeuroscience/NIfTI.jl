@@ -93,7 +93,7 @@ function readhdr1(s::IOMeta)
     # Uncecessary fields
     skip(s, 35)
 
-    s["header"] = Dict{String,Any}()
+    s["header"] = ImageProperties{:header}()
     s["header"]["diminfo"] = read(s, Int8)
     N = Int(read(s, Int16))
     sz = ([Int(read(s, Int16)) for i in 1:N]...,)
@@ -114,8 +114,8 @@ function readhdr1(s::IOMeta)
     skip(s, (7-N)*4)  # skip filler dims
 
     s["data_offset"] = Int(read(s, Float32))
-    s["header"]["scaleslope"] = read(s, Float32)
-    s["header"]["scaleintercept"] = read(s, Float32)
+    s["header"]["scaleslope"] = Float64(read(s, Float32))
+    s["header"]["scaleintercept"] = Float64(read(s, Float32))
     s["header"]["sliceend"] = read(s, Int16)
     s["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int8), "Unkown")
 
@@ -161,7 +161,7 @@ function readhdr1(s::IOMeta)
 end
 
 function readhdr2(s::IOMeta)
-    s["header"] = Dict{String,Any}()
+    s["header"] = ImageProperties{:header}()
     s["header"]["magic"] = (read(s, 8)...,)
     T = get(NiftiDatatypes, read(s, Int16), UInt8)
     skip(s, 2)  # skip bitpix
