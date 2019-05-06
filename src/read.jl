@@ -106,7 +106,7 @@ function readhdr1(s::IOMeta)
 
     # skip bitpix
     skip(s, 2)
-    s["header"]["slicestart"] = read(s, Int16)
+    s["header"]["slicestart"] = Int(read(s, Int16)) + 1  # to 1 based indexing
 
     qfac = read(s, Float32)
     pixdim = (read!(s, Vector{Float32}(undef, N))...,)
@@ -116,7 +116,7 @@ function readhdr1(s::IOMeta)
     s["data_offset"] = Int(read(s, Float32))
     s["header"]["scaleslope"] = Float64(read(s, Float32))
     s["header"]["scaleintercept"] = Float64(read(s, Float32))
-    s["header"]["sliceend"] = read(s, Int16)
+    s["header"]["sliceend"] = Int(read(s, Int16) + 1)  # to 1 based indexing
     s["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int8), "Unkown")
 
     xyzt_units = Int32(read(s, Int8))
@@ -185,8 +185,8 @@ function readhdr2(s::IOMeta)
     s["header"]["sliceduration"] = read(s, Float64)
     toffset = read(s, Float64)
 
-    s["header"]["slicestart"] = read(s, Int64)
-    s["header"]["sliceend"] = read(s, Int64)
+    s["header"]["slicestart"] = read(s, Int64) + 1  # to 1 based indexing
+    s["header"]["sliceend"] = read(s, Int64) + 1
     s["description"] = String(read(s, 80))
     s["auxfile"] = String(read(s, 24))
     s["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)

@@ -36,6 +36,11 @@ export niread,
        phasedim,
        frequencydim,
        slicedim,
+       slicecode,
+       sliceduration,
+       sliceend,
+       qform,
+       sform,
        # ImageFormats
        ImageFormat,
        ImageProperties,
@@ -51,8 +56,7 @@ export niread,
        calmin,
        calmax,
        header,
-       modality,
-       data_offset
+       modality
 
 
 end

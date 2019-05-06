@@ -1,3 +1,4 @@
+# TODO: change slice values to reflect 1 based indexing
 const NiftiSliceCodes = Dict{Int,String}(
     0 => "Unkown",
     1 => "Sequential+Increasing",
@@ -13,7 +14,11 @@ for (k, v) in NiftiSliceCodes
 end
 
 """
-    scaleslope
+    scaleslope --> Float64
+
+The values stored in each voxel can be scaled, allowing storage of voxels as
+smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
+These values are ignored for RGB(A) data types.
 """
 scaleslope(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = scaleslope(properties(img))
 scaleslope(s::ImageStream) = scaleslope(properties(s))
@@ -21,7 +26,11 @@ scaleslope(p::ImageProperties) = getheader(p, "scaleslope", zero(Float64))::Floa
 scaleslope(A::AbstractArray) = 0.0
 
 """
-    scaleintercept
+    scaleintercept -> Float64
+
+The values stored in each voxel can be scaled, allowing storage of voxels as
+smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
+These values are ignored for RGB(A) data types.
 """
 scaleintercept(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = scaleintercept(properties(img))
 scaleintercept(s::ImageStream) = scaleintercept(properties(s))
@@ -29,47 +38,52 @@ scaleintercept(p::ImageProperties) = getheader(p, "scaleintercept", zero(Float64
 scaleintercept(A::AbstractArray) = 0.0
 
 # dimension info for nifti header
-diminfo(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = diminfo(properties(img))
-diminfo(A::AbstractArray) = Int8(0)
-diminfo(s::ImageStream) = diminfo(properties(s))::Int8
+diminfo(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} =
+    _diminfo(properties(img), size(img, N))
+diminfo(s::ImageStream) = _diminfo(properties(s), size(s, ndims(s)))::Int8
+_diminfo(p::ImageProperties, last_size::Int) =
+    getheader(p, "diminfo", 0x00 | 0x00 | (Int8(last_size-1) << 4))
+diminfo(A::AbstractArray) = 0x00 | 0x00 | (Int8(size(A, ndims(A))-1) << 4)
 diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
 
 """
-    frequencydim
+    frequencydim(x) -> Int8
 
-```jldoctest
-julia> using NIfTI, ImageMetadata
-
-julia> p = ImageProperties{:NII}();
-
-julia> p["header"] = Dict{String,Any}("diminfo" => Int8(57))
-
-julia> img = ImageMeta(rand(4,4), p)
-
-julia> frequencydim(img)
-1
-
-julia> phasedim(img)
-2
-
-julia> slicedim(img)
-3
-```
+Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. If not
+applicable to scan type defaults to `0`.
 """
-frequencydim(s) = diminfo(s)::Int8 & Int8(3)
+frequencydim(s) = diminfo(s)::Int8 & Int8(3) + 1
 
 """
-    phasedim
+    phasedim(x) -> Int8
+
+Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. If not
+applicable to scan type defaults to `0`.
 """
-phasedim(s) = (diminfo(s)::Int8 >> 2) & Int8(3)
+phasedim(s) = (diminfo(s)::Int8 >> 2) & Int8(3) + 1
 
 """
-    slicedim
+    slicedim(x) -> Int8
+
+Which dimension slices where acquired at throughout MRI acquisition. Defaults
+to size of last dimension.
 """
-slicedim(s) = diminfo(s)::Int8 >> 4
+slicedim(s) = (diminfo(s)::Int8 >> 4) + 1
 
 """
-    slicecode
+    slicecode(x) -> String
+
+Indicates the timing and pattern of slice acquisition. The following codes are
+defined:
+
+* "Unkown",
+* "Sequential+Increasing"
+* "Sequential+Decreasing"
+* "Alternating+Increasing"
+* "Alternating+Decreasing"
+* "Alternating+Increasing#2"
+* "Alternating+Decreasing#2"
+
 """
 slicecode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = slicecode(properties(img))
 slicecode(s::ImageStream) = slicecode(properties(s))
@@ -77,7 +91,10 @@ slicecode(p::ImageProperties) = getheader(p, "slicecode", "Unkown")
 slicecode(A::AbstractArray) = "Unkown"
 
 """
-    sliceduration
+    sliceduration(x) -> Float64
+
+The amount of time necessary to acquire each slice throughout the MRI
+acquisition. Defaults to `0.0`.
 """
 sliceduration(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sliceduration(properties(img))
 sliceduration(s::ImageStream) = sliceduration(properties(s))
@@ -85,20 +102,27 @@ sliceduration(p::ImageProperties) = getheader(p, "sliceduration", 0.0)
 sliceduration(A::AbstractArray) = 0.0
 
 """
-    slicestart
+    slicestart(x) -> Int
+
+Which slice corresponds to the first slice acquired during MRI acquisition
+(i.e. not padded slices). Defaults to `1`.
 """
 slicestart(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = slicestart(properties(img))
 slicestart(s::ImageStream) = slicestart(properties(s))
-slicestart(p::ImageProperties) = getheader(p, "slicestart", 0)
-slicestart(A::AbstractArray) = 0
+slicestart(p::ImageProperties) = getheader(p, "slicestart", 1)
+slicestart(A::AbstractArray) = 1
 
 """
-    sliceend
+    sliceend(x)
+
+Which slice corresponds to the last slice acquired during MRI acquisition
+(i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
 """
-sliceend(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sliceend(properties(img))
-sliceend(s::ImageStream) = sliceend(properties(s))
-sliceend(p::ImageProperties) = getheader(p, "sliceend", 0)
-sliceend(A::AbstractArray) = 0
+sliceend(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = _sliceend(properties(img), size(img, slice_dim(img)))
+sliceend(s::ImageStream) = _sliceend(properties(s), size(s, slicedim(s)))
+_sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", slice_dim_size)
+sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
+sliceend(A::AbstractArray) = size(A, ndims(A))
 
 """
     qform(img)
@@ -143,7 +167,7 @@ qformcode(p::ImageProperties) = getheader(p, "qformcode", :Unkown)
 qformcode(A::AbstractArray) = :Unkown
 
 """
-sformcode
+    sformcode
 """
 sformcode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sformcode(properties(img))
 sformcode(s::ImageStream) = sformcode(properties(s))
