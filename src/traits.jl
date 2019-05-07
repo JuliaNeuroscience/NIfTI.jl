@@ -159,7 +159,14 @@ function _sform(sd::Tuple{Ax1,Ax2}) where {Ax1,Ax2}
 end
 
 """
-qformcode
+    qformcode(x)
+
+
+Code describing the orientation of the image in the scanner.
+May be any of the following:
+
+* Unkown
+* Scanner_anat
 """
 qformcode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = qformcode(properties(img))
 qformcode(s::ImageStream) = qformcode(properties(s))
@@ -167,7 +174,15 @@ qformcode(p::ImageProperties) = getheader(p, "qformcode", :Unkown)
 qformcode(A::AbstractArray) = :Unkown
 
 """
-    sformcode
+    sformcode(x)
+
+Code describing the orientation of the image.
+May be any of the following:
+
+* Unkown
+* Aligned_anat
+* Talairach
+* MNI152
 """
 sformcode(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = sformcode(properties(img))
 sformcode(s::ImageStream) = sformcode(properties(s))

@@ -249,8 +249,7 @@ end
 # TODO:
 # - test
 # - should only take matrix input
-function mat2quat(R::AbstractMatrix{T}, qb::T, qc::T, qd::T,
-                  qfac::T) where {T<:AbstractFloat}
+function mat2quat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     qx = R[1,4]
     qy = R[2,4]
     qz = R[3,4]
@@ -348,11 +347,9 @@ function mat2quat(R::AbstractMatrix{T}, qb::T, qc::T, qd::T,
             a = -a
         end
     end
+    return b, c, d
 
-    qb = b
-    qc = b
-    qe = b
-    return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
+    #return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
 end
 
 function orthomat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
