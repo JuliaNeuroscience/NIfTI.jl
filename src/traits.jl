@@ -215,21 +215,26 @@ function nidim(x::ImageStream)
     return dim
 end
 
-function pixdim(s::ImageStream)
-    pd = fill(1.0, 8)
-    # TODO: check on first pixdim measures
-    pd[1] = -1
-    pd[2:ndims(s)+1] = [map(i->ustrip(step(i.val)), axes(s))...]
-    return pd
+function pixdim0(s::ImageStream)
+    if axisnames(s, 1) == :L2R
+        return 1
+    elseif axisnames(s, 1) == :R2L
+        return -1
+    else
+        return 0
+    end
 end
+
+pixdim(s::ImageStream{T,N}) where {T,N}
+    [pixdim0(s), map(i->ustrip(step(i.val)), axes(s))..., fill(1, 8-(N+1))]
 
 function xyztunits(s::ImageStream)
     (get(NiftiUnitsReverse, spatunits(s)[1], Int16(0)) & 0x07) |
     (get(NiftiUnitsReverse,    timeunits(s), Int16(0)) & 0x38)
 end
 
-function toffset(s::ImageStream{T,I}) where {T,I}
-    if length(I.parameters) < 4
+function toffset(s::ImageStream{T,N}) where {T,N}
+    if N < 4
         return 0
     else
         ustrip(timeaxis(s)[1])
