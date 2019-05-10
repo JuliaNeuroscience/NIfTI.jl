@@ -215,18 +215,19 @@ function nidim(x::ImageStream)
     return dim
 end
 
-function pixdim0(s::ImageStream)
+function pixdim0(::Type{T}, s::ImageStream) where T
     if axisnames(s, 1) == :L2R
-        return 1
+        return T(1)
     elseif axisnames(s, 1) == :R2L
-        return -1
+        return T(-1)
     else
-        return 0
+        return T(0)
     end
 end
 
-pixdim(s::ImageStream{T,N}) where {T,N}
-    [pixdim0(s), map(i->ustrip(step(i.val)), axes(s))..., fill(1, 8-(N+1))]
+pixdim(s::ImageStream) = _pixdim(typeof(ustrip(axes(s, 1).val[1])), s)
+_pixdim(::Type{AxT}, s::ImageStream{T,N}) where {AxT,T,N} =
+    [pixdim0(AxT, s), map(i->ustrip(step(i.val)), axes(s))..., fill(AxT(1), 8-(N+1))...]
 
 function xyztunits(s::ImageStream)
     (get(NiftiUnitsReverse, spatunits(s)[1], Int16(0)) & 0x07) |
