@@ -20,44 +20,44 @@ ImageProperties{:NOTHING} with 1 entry:
 julia>
 ```
 """
-struct ImageProperties{sym} <: AbstractDict{String,Any}
+struct ImageProperties{F} <: AbstractDict{String,Any}
     properties::AbstractDict{String,Any}
 
     function ImageProperties(d::AbstractDict{String,Any}; copyprops::Bool=false)
         if copyprops
-            new{:NOTHING}(deepcopy(d))
+            new{format"NOTHING"}(deepcopy(d))
         else
-            new{:NOTHING}(d)
+            new{format"NOTHING"}(d)
         end
     end
 
-    function ImageProperties{sym}(d::AbstractDict{String,Any}; copyprops::Bool=false) where {sym}
+    function ImageProperties{F}(d::AbstractDict{String,Any}; copyprops::Bool=false) where {F}
         if copyprops
-            new{sym}(deepcopy(d))
+            new{F}(deepcopy(d))
         else
-            new{sym}(d)
+            new{F}(d)
         end
     end
 
-    function ImageProperties{symnew}(d::ImageProperties{sym}; copyprops::Bool=false) where {sym,symnew}
+    function ImageProperties{Fnew}(d::ImageProperties{F}; copyprops::Bool=false) where {F,Fnew}
         if copyprops
-            new{sym}(deepcopy(d))
+            new{F}(deepcopy(d))
         else
-            new{sym}(d)
+            new{F}(d)
         end
     end
 
-    function ImageProperties(d::ImageProperties{sym}; copyprops::Bool=false) where sym
+    function ImageProperties(d::ImageProperties{F}; copyprops::Bool=false) where F
         if copyprops
-            new{sym}(deepcopy(properties(d)))
+            new{F}(deepcopy(properties(d)))
         else
-            new{sym}(properties(d))
+            new{F}(properties(d))
         end
     end
 end
 
-ImageProperties() = ImageProperties{:Nothing}()
-ImageProperties{sym}() where {sym} = ImageProperties{sym}(Dict{String,Any}())
+ImageProperties() = ImageProperties{format"Nothing"}()
+ImageProperties{F}() where {F} = ImageProperties{F}(Dict{String,Any}())
 
 struct IMNothing end   # to avoid confusion in the case where dict[key] === nothing
 macro get(p, k, default)
@@ -80,19 +80,19 @@ function ImageProperties(img::ImageMeta; copyprops::Bool=false)
     end
 end
 
-function ImageProperties{sym}(img::ImageMeta; copyprops::Bool=false) where sym
+function ImageProperties{F}(img::ImageMeta; copyprops::Bool=false) where F
     if copyprops
-        _add_spacedirections(ImageProperties{sym}(deepcopy(properties(img))), img)
+        _add_spacedirections(ImageProperties{F}(deepcopy(properties(img))), img)
     else
-        _add_spacedirections(ImageProperties{sym}(properties(img)), img)
+        _add_spacedirections(ImageProperties{F}(properties(img)), img)
     end
 end
 
 ImageProperties(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}(); copyprops::Bool=false) =
     _add_spacedirections(ImageProperties(props), a)
 
-ImageProperties{sym}(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}(); copyprops::Bool=false) where sym =
-    _add_spacedirections(ImageProperties{sym}(props), a)
+ImageProperties{F}(a::AbstractArray, props::AbstractDict{String,Any}=Dict{String,Any}(); copyprops::Bool=false) where F =
+    _add_spacedirections(ImageProperties{F}(props), a)
 
 
 function _add_spacedirections(p::ImageProperties, A::AbstractArray)
@@ -106,16 +106,16 @@ end
 
 ImageMetadata.properties(d::ImageProperties) = d.properties
 
-metatype(d::ImageProperties{sym}) where {sym} = sym
+metatype(d::ImageProperties{F}) where {F} = F
 
 Base.setindex!(d::ImageProperties, val, key::String) = setindex!(properties(d), val, key)
 Base.getindex(d::ImageProperties, key::String) = properties(d)[key]
 
-Base.copy(d::ImageProperties{sym}) where sym = ImageProperties{sym}(deepcopy(properties(d)))
+Base.copy(d::ImageProperties{F}) where F = ImageProperties{F}(deepcopy(properties(d)))
 Base.delete!(d::ImageProperties, key::String) = (delete!(properties(d), key); d)
 # If certain dicts are suppose to have certain elements this may need customization per data type
 #Base.empty!(d::ImageProperties) = (empty!(properties(d)); d)
-#Base.empty(d::ImageProperties{sym}) where F = ImageProperties{sym}()
+#Base.empty(d::ImageProperties{F}) where F = ImageProperties{F}()
 Base.isempty(d::ImageProperties) = isempty(properties(d))
 
 Base.in(item, d::ImageProperties) = in(item, properties(d))

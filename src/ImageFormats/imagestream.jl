@@ -1,23 +1,25 @@
-mutable struct ImageStream{T,I<:Tuple,IOType}
+mutable struct ImageStream{T,N,I<:Tuple,IOType,F}
     io::IOType
     indices::I
-    properties::ImageProperties
+    properties::ImageProperties{F}
 end
 
-ImageStream{T}(io::IOMeta{IOType}, indices::I) where {T,I,IOType} =
-    ImageStream{T,I,IOType}(stream(io), indices, properties(io))
+ImageStream{T}(io::IOMeta{IOType}, indices::Ax) where {T,Ax,IOType} =
+    ImageStream{T,length(indices),Ax,IOType}(stream(io), indices, properties(io))
 
-ImageStream{T}(io::IOType, indices::I, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,I,IOType<:IO} =
-    ImageStream{T,I,IOType}(io, indices, ImageProperties(properties; copyprops=copyprops))
+ImageStream{T}(io::IOType, indices::Ax, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,Ax,IOType<:IO} =
+    ImageStream{T,length(indices),Ax,IOType}(io, indices, ImageProperties(properties; copyprops=copyprops))
 
-ImageStream(io::IOType, A::AbstractArray{T}; copyprops::Bool=false) where {T,I,IOType} =
-    ImageStream{T,typeof(AxisArrays.axes(A)),IOType}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+ImageStream(io::IOType, A::AbstractArray{T,N}; copyprops::Bool=false) where {T,N,IOType} =
+    ImageStream{T,N,typeof(AxisArrays.axes(A)),IOType}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
 
 function ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
     open(f, mode) do io
-        ImageStream{T,typeof(AxisArrays.axes(A)),typeof(io)}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+        ImageStream{T,N,typeof(AxisArrays.axes(A)),typeof(io)}(io, AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
     end
 end
+ImageStream{T,N,Ax,IOType}(io::IOType, indices::Ax, props::ImageProperties{F}) where {T,N,Ax,IOType,F} =
+    ImageStream{T,N,Ax,IOType,F}(io::IOType, indices::Ax, props::ImageProperties{F})
 
 ImageMetadata.properties(s::ImageStream) = s.properties
 ImageMetadata.copyproperties(s::ImageStream, io::IOType) where IOType =
@@ -28,8 +30,8 @@ ImageCore.spacedirections(s::ImageStream) = @get s "spacedirections" ImageCore._
 
 
 # array like interface
-Base.ndims(s::ImageStream{T,I}) where {T,I} = length(I.parameters)
-Base.eltype(s::ImageStream{T,I}) where {T,I} = length(I.parameters)
+Base.ndims(s::ImageStream{T,N}) where {T,N} = N
+Base.eltype(s::ImageStream{T,N}) where {T,N} = T
 
 Base.axes(s::ImageStream) = s.indices
 Base.axes(s::ImageStream, i::Int) = s.indices[i]
@@ -39,15 +41,18 @@ Base.size(s::ImageStream, i::Int) = length(s.indices[i])
 
 Base.length(s::ImageStream) = prod(size(s))
 
-AxisArrays.axisnames(s::ImageStream{T,I}) where {T,I} = axisnames(I)
+AxisArrays.axisnames(s::ImageStream{T,N,I}) where {T,N,I} = axisnames(I)
+AxisArrays.axisnames(s::ImageStream{T,N,I}, i::Int) where {T,N,I} = axisnames(I)[i]
 AxisArrays.axisvalues(s::ImageStream) = axisvalues(axes(s)...)
+
+AxisArrays.axistype(s::ImageStream, i::Int) = eltype(axes(s, i))
 
 ImageCore.spatialorder(s::ImageStream) = ImageAxes.filter_space_axes(axes(s), axisnames(s))
 ImageCore.size_spatial(s::ImageStream)    = ImageAxes.filter_space_axes(axes(s), size(s))
 ImageCore.indices_spatial(s::ImageStream) = ImageAxes.filter_space_axes(axes(s), axes(s))
 
-ImageCore.coords_spatial(s::ImageStream{T,I}) where {T,I} =
-    ImageAxes.filter_space_axes(axes(s), ntuple(identity, Val(length(I.parameters))))
+ImageCore.coords_spatial(s::ImageStream{T,N}) where {T,N} =
+    ImageAxes.filter_space_axes(axes(s), ntuple(identity, Val(N)))
 ImageCore.sdims(s::ImageStream) = length(coords_spatial(s))
 ImageCore.pixelspacing(s::ImageStream) = map(step, ImageAxes.filter_space_axes(axes(s), axisvalues(s)))
 
@@ -58,8 +63,8 @@ function ImageAxes.assert_timedim_last(s::ImageStream)
     istimeaxis(axes(s)[end]) || error("time dimension is not last")
 end
 
-ImageAxes.timedim(s::ImageStream{T,I}) where {T,I} =
-    ImageAxes._timedim(ImageAxes.filter_time_axis(axes(s), ntuple(identity, Val(length(I.parameters)))))
+ImageAxes.timedim(s::ImageStream{T,N}) where {T,N} =
+    ImageAxes._timedim(ImageAxes.filter_time_axis(axes(s), ntuple(identity, Val(N))))
 
 function ImageAxes.colordim(s::ImageStream)
     d = ImageAxes._colordim(1, axes(s))
@@ -109,12 +114,12 @@ Base.reset(s::ImageStream) = reset(stream(s))
 Base.seekend(s::ImageStream) = seekend(stream(s))
 Base.peek(s::ImageStream) = peek(stream(s))
 
-function read(s::ImageStream{T}, sink::Type{A}; mmap::Bool=false) where {T,A<:Array}
+function read(s::ImageStream{T,N}, sink::Type{A}; mmap::Bool=false) where {T,N,A<:Array}
     if mmap
         seek(s, data_offset(s))
-        Mmap.mmap(stream(s), Array{T}, size(s))
+        Mmap.mmap(stream(s), Array{T,N}, size(s))
     else
-        read!(stream(s), Array{T}(undef, size(s)))
+        read!(stream(s), Array{T,N}(undef, size(s)))
     end
 end
 
@@ -124,11 +129,11 @@ function read!(s::ImageStream{T}, sink::Array{T}) where T
     read!(stream(s), sink)
 end
 
-@inline function read(s::ImageStream{T}, sink::Type{A}; mmap::Bool=false) where {T,A<:StaticArray}
+@inline function read(s::ImageStream{T,N}, sink::Type{A}; mmap::Bool=false) where {T,N,A<:StaticArray}
     SA = similar_type(A, T, Size(size(s)))
     if mmap
         seek(s, data_offset(s))
-        SA(Mmap.mmap(s, Array{T}, size(s)))
+        SA(Mmap.mmap(s, Array{T,N}, size(s)))
     else
         seek(s, data_offset(s))
         read(stream(s), SA)
@@ -165,5 +170,3 @@ write(s::ImageStream, x::String) = write(stream(s), x)
 
 # this will allow chunkwise reading of images
 # function readchunk() end
-
-

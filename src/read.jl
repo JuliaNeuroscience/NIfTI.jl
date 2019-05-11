@@ -4,13 +4,13 @@ const MetaArray{T,N} = ImageMeta{T,N,Array{T,N}}
 function readhdr(io::IO)
     ret = read(io, Int32)
     if ret == Int32(348)
-        readhdr1(IOMeta(io, ImageProperties{:NII}()))
+        readhdr1(IOMeta(io, ImageProperties{format"NII"}()))
     elseif ret == Int32(540)
-        readhdr2(IOMeta(io, ImageProperties{:NII}()))
+        readhdr2(IOMeta(io, ImageProperties{format"NII"}()))
     elseif ret == ntoh(Int32(348))
-        readhdr1(IOMeta(SwapStream(io), ImageProperties{:NII}()))
+        readhdr1(IOMeta(SwapStream(io), ImageProperties{format"NII"}()))
     elseif ret == ntoh(Int32(540))
-        readhdr2(IOMeta(SwapStream(io, needswap=true), ImageProperties{:NII}()))
+        readhdr2(IOMeta(SwapStream(io, needswap=true), ImageProperties{format"NII"}()))
     else
         error("Not a supported NIfTI format")
     end

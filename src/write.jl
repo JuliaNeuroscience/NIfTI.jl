@@ -20,7 +20,7 @@ function niwrite(f::String, A::AbstractArray; version::Int=1, copyprops::Bool=fa
 end
 
 function niprops(A::AbstractArray)
-    p = ImageProperties{:NII}()
+    p = ImageProperties{format"NII"}()
     p["spacedirections"] = spacedirections(A)
 end
 
