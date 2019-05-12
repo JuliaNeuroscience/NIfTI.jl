@@ -39,7 +39,6 @@ scaleintercept(A::AbstractArray) = 0.0
 # dimension info for nifti header
 diminfo(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = diminfo(properties(img))
 diminfo(s::ImageStream) = Int8(0)
-diminfo(p::ImageProperties) = getheader(p, "diminfo", Int8(0))
 diminfo(A::AbstractArray) = Int8(0)
 diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
 
