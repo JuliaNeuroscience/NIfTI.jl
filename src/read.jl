@@ -1,21 +1,6 @@
 const MetaAxisArray{T,N} = ImageMeta{T,N,AxisArray{T,N,Array{T,N}}}
 const MetaArray{T,N} = ImageMeta{T,N,Array{T,N}}
 
-function readhdr(io::IO)
-    ret = read(io, Int32)
-    if ret == Int32(348)
-        readhdr1(IOMeta(io, ImageProperties{format"NII"}()))
-    elseif ret == Int32(540)
-        readhdr2(IOMeta(io, ImageProperties{format"NII"}()))
-    elseif ret == ntoh(Int32(348))
-        readhdr1(IOMeta(SwapStream(io), ImageProperties{format"NII"}()))
-    elseif ret == ntoh(Int32(540))
-        readhdr2(IOMeta(SwapStream(io, needswap=true), ImageProperties{format"NII"}()))
-    else
-        error("Not a supported NIfTI format")
-    end
-end
-
 function isgz(io::IO)
     gzbits = read(io, 2)
     ret = gzbits == [0x1F,0x8B]
@@ -53,20 +38,6 @@ nistreaming(f::String; mode::String="r") = open(f, mode) do io
     nistreaming(io, f)
 end
 
-function nitype(s::ImageStream)
-    if s["header"]["magic"] == NP1_MAGIC
-        return "NIfTI-1Single"
-    elseif s["header"]["magic"] == NI1_MAGIC
-        return "NIfTI-1Double"
-    elseif s["header"]["magic"] == NP2_MAGIC
-        return "NIfTI-2Single"
-    elseif s["header"]["magic"] == NI1_MAGIC
-        return "NIfTI-2Double"
-    else
-        error("Unsupported file type")
-    end
-end
-
 function nistreaming(io::IO, f::String)
     if isgz(io)
         gzs = gzdopen(io)
@@ -87,6 +58,35 @@ function nistreaming(io::IO, f::String)
         end
     end
     return s
+end
+
+function nitype(s::ImageStream)
+    if s["header"]["magic"] == NP1_MAGIC
+        return "NIfTI-1Single"
+    elseif s["header"]["magic"] == NI1_MAGIC
+        return "NIfTI-1Double"
+    elseif s["header"]["magic"] == NP2_MAGIC
+        return "NIfTI-2Single"
+    elseif s["header"]["magic"] == NI1_MAGIC
+        return "NIfTI-2Double"
+    else
+        error("Unsupported file type")
+    end
+end
+
+function readhdr(io::IO)
+    ret = read(io, Int32)
+    if ret == Int32(348)
+        readhdr1(IOMeta(io, ImageProperties{format"NII"}()))
+    elseif ret == Int32(540)
+        readhdr2(IOMeta(io, ImageProperties{format"NII"}()))
+    elseif ret == ntoh(Int32(348))
+        readhdr1(IOMeta(SwapStream(io, needswap=true), ImageProperties{format"NII"}()))
+    elseif ret == ntoh(Int32(540))
+        readhdr2(IOMeta(SwapStream(io, needswap=true), ImageProperties{format"NII"}()))
+    else
+        error("Not a supported NIfTI format")
+    end
 end
 
 function readhdr1(s::IOMeta)
@@ -167,7 +167,7 @@ function readhdr2(s::IOMeta)
     skip(s, 2)  # skip bitpix
 
     N = read(s, Int64)
-    sz = read(s, Vector{Int64}(undef, N))
+    sz = Tuple(read!(s, Vector{Int64}(undef, N)))
     skip(s, (7-N)*8)  # skip filler dims
 
     s["header"]["intentparams"] = (read!(s, Vector{Float64}(undef, 3))...,)
@@ -192,7 +192,7 @@ function readhdr2(s::IOMeta)
     s["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
     s["header"]["sformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
 
-    s["header"]["qform"] = qform(s["header"]["qformcode"], read(s, Vector{Float64}(undef, 6))..., pixdim[1], pixdim[2], pixdim[3], qfac)
+    s["header"]["qform"] = qform(s["header"]["qformcode"], read!(s, Vector{Float64}(undef, 6))..., pixdim[1], pixdim[2], pixdim[3], qfac)
     s["header"]["sform"] = transpose(
                                    SMatrix{4,4,Float64,16}(
                                         (read!(s, Vector{Float64}(undef, 12))..., 0.0, 0.0, 0.0, 1.0)))
@@ -214,7 +214,7 @@ function readhdr2(s::IOMeta)
                                 Tuple(s["header"]["sform"][2,1:3]),
                                 Tuple(s["header"]["sform"][3,1:3]))
     end
-    s["header"]["extension"] = niread(s, NiftiExtension)
+    s["header"]["extension"] = read(s, NiftiExtension)
 
-    return ImageStream(s, niaxes(sz, xyzt_units, toffset, pixdim, s))
+    return ImageStream{T}(s, niaxes(sz, xyzt_units, toffset, pixdim, s))
 end

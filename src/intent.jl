@@ -125,9 +125,6 @@ intentname(::Nothing) = intentname()
 intentname(A::AbstractArray) = intentname()
 intentname() = String(fill(UInt8(0), 16))
 
-
-
-
 """
     intentparams(img)
 """

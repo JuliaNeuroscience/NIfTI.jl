@@ -64,10 +64,12 @@ read(s::IOMeta, x::Type{<:AbstractArray}) = read(stream(s), x)
 read(s::IOMeta, x::Type{Int8}) = read(stream(s), Int8)
 
 
-for T in (Bool,UInt128,UInt16,UInt32,UInt64,UInt8,BigInt,Int128,Int16,Int32,Int64,Int8,
+for T in (Bool,
+          UInt128,UInt16,UInt32,UInt64,UInt8,
+          BigInt,Int128,Int16,Int32,Int64,Int8,
           BigFloat,Float16,Float32,Float64)
     @eval begin
-        read!(s::IOMeta, a::Array{$T}) = read!(stream(s), a)
+        read!(s::IOMeta, a::A) where A<:Array{$T} = read!(stream(s), a)
     end
 end
 
@@ -81,8 +83,9 @@ end
 =#
 
 function read(s::IOMeta,
-    T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},
-             Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+              T::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int128},
+                       Type{UInt16},Type{UInt32},Type{UInt64},Type{UInt128},
+                       Type{Float16},Type{Float32},Type{Float64}})
     read!(stream(s), Ref{T}(0))[]::T
 end
 

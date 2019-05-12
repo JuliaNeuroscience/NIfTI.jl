@@ -1,7 +1,7 @@
 module ImageFormats
 
 using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays
-using Unitful: unit
+using Unitful: unit, ustrip
 using GeometryTypes: Point
 using Rotations: Quat
 using Distributions: TDist,Chi,Chisq,Poisson,FDist,Beta,Binomial,Gamma,Normal,

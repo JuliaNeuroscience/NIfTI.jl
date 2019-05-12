@@ -90,11 +90,11 @@ end
 
 function writehdr2(s::ImageStream{T}) where T
     write(s, Int32(540))                                 # 0 - sizeof_hdr::Int32
-    write(s, NP2_MAGIC)                                  # 4 - magic::NTuple{8,UInt8}
+    write(s, [NP2_MAGIC...])                                  # 4 - magic::NTuple{8,UInt8}
     write(s, Int16(NiftiDatatypesReverse[T]))            # 12 - datatype::Int16
     write(s, Int16(sizeof(T)*8))                         # 14 - bitpix::Int16
     write(s, convert(Vector{Int64}, nidim(s)))           # 16 - dim::NTuple{8,Int64}
-    write(s, convert(Vector{Float64}, intentparams(s)))  # 80 - intent_[1:3]
+    write(s, convert(Vector{Float64}, [intentparams(s)...]))  # 80 - intent_[1:3]
     write(s, convert(Vector{Float64}, pixdim(s)))        # 104 - pixdim::NTuple{8,Float64}
     write(s, Int64(voxoffset(s, Val(2))))                # 168 - vox_offset::Int64
     write(s, Float64(scaleslope(s)))                     # 176 - scl_slope::Float64

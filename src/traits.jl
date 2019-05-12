@@ -1,4 +1,3 @@
-# TODO: change slice values to reflect 1 based indexing
 const NiftiSliceCodes = Dict{Int,String}(
     0 => "Unkown",
     1 => "Sequential+Increasing",
@@ -38,12 +37,10 @@ scaleintercept(p::ImageProperties) = getheader(p, "scaleintercept", zero(Float64
 scaleintercept(A::AbstractArray) = 0.0
 
 # dimension info for nifti header
-diminfo(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} =
-    _diminfo(properties(img), size(img, N))
-diminfo(s::ImageStream) = _diminfo(properties(s), size(s, ndims(s)))::Int8
-_diminfo(p::ImageProperties, last_size::Int) =
-    getheader(p, "diminfo", 0x00 | 0x00 | (Int8(last_size-1) << 4))
-diminfo(A::AbstractArray) = 0x00 | 0x00 | (Int8(size(A, ndims(A))-1) << 4)
+diminfo(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = diminfo(properties(img))
+diminfo(s::ImageStream) = Int8(0)
+diminfo(p::ImageProperties) = getheader(p, "diminfo", Int8(0))
+diminfo(A::AbstractArray) = Int8(0)
 diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
 
 """

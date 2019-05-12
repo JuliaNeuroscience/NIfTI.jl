@@ -12,7 +12,7 @@ using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, 
 
 import GeometryTypes: Triangle, Point
 import Rotations: Quat
-import AxisArrays: axisnames, permutation, AxisArray
+import AxisArrays: axisnames, permutation, AxisArray, axistype
 
 import Base64
 
@@ -26,7 +26,6 @@ include("traits.jl")
 include("orientation.jl")
 include("extension.jl")
 include("intent.jl")
-include("traits.jl")
 include("read.jl")
 include("write.jl")
 include("fileio.jl")
