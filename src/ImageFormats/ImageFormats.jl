@@ -29,7 +29,8 @@ export ImageFormat,
        header,
        modality,
        data_offset,
-       getheader
+       getheader,
+       axesoffsets
 
 include("swapstreams.jl")
 include("imageproperties.jl")

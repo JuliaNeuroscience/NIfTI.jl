@@ -56,6 +56,9 @@ ImageCore.coords_spatial(s::ImageStream{T,N}) where {T,N} =
 ImageCore.sdims(s::ImageStream) = length(coords_spatial(s))
 ImageCore.pixelspacing(s::ImageStream) = map(step, ImageAxes.filter_space_axes(axes(s), axisvalues(s)))
 
+
+getheader(s::ImageStream, k::String, default) = getheader(properties(s), k, default)
+
 # TODO: should probably not export underscores in future
 ImageAxes.timeaxis(s::ImageStream) = ImageAxes._timeaxis(axes(s)...)
 ImageAxes.nimages(s::ImageStream) = ImageAxes._nimages(timeaxis(s))
@@ -70,6 +73,13 @@ function ImageAxes.colordim(s::ImageStream)
     d = ImageAxes._colordim(1, axes(s))
     d > ndims(s) ? 0 : d
 end
+
+axesoffsets(img::Union{AbstractArray,ImageStream}) = map(i -> _firstindex(i) - 1, axes(img))
+axesoffsets(img::Union{AbstractArray,ImageStream}, i::Int) = _firstindex(axes(img, i)) - 1
+
+_firstindex(x::Axis) = firstindex(x.val)
+_firstindex(x::AbstractArray) = firstindex(x)
+
 
 #=
 TimeAxis,

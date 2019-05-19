@@ -207,10 +207,10 @@ function quat2affine(qb::T, qc::T, qd::T,
         zd = -zd  # left handedness?
     end
 
-    SMatrix{4,4,T}([((a*a+b*b-c*c-d*d)*xd) (2.0*(b*c-a*d)*yd)     (2.0*(b*d+a*c)*zd)     dx
-                     (2.0*(b*c+a*d )*xd)   ((a*a+c*c-b*b-d*d)*yd)  (2.0*(c*d-a*b)*zd)     dy
-                     (2.0*(b*d-a*c)*xd)    (2.0*(c*d+a*b)*yd)      ((a*a+d*d-c*c-b*b)*zd) dz
-                      0.0                    0.0                    0.0                    1.0])
+    return SMatrix{4,4,T}([T[((a*a+b*b-c*c-d*d)*xd),     (2.0*(b*c-a*d)*yd),     (2.0*(b*d+a*c)*zd), dx]'
+                           T[   (2.0*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),     (2.0*(c*d-a*b)*zd), dy]'
+                           T[    (2.0*(b*d-a*c)*xd),     (2.0*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd), dz]'
+                           T[                     0,                      0,                      0,  1]])
 end
 
 function rownorm(A::StaticMatrix{3,3,T}) where {T <: AbstractFloat}
@@ -246,46 +246,60 @@ function ori2mat(x::Symbol, y::Symbol, z::Symbol)
      [0 0                               0 1]]
 end
 
-# TODO:
-# - test
-# - should only take matrix input
-function mat2quat(R::NTuple{N,NTuple{N,T}}) where {N,T<:AbstractFloat}
-    qx = R[1,4]
-    qy = R[2,4]
-    qz = R[3,4]
 
-    r11 = R[1][1]
-    r12 = R[1][2]
-    r13 = R[1][3]
 
-    r21 = R[2][1]
-    r22 = R[2][2]
-    r23 = R[2][3]
+#= clib note
+ - Any NULL pointer on input won't get assigned (e.g., if you don't want
+   dx,dy,dz, just pass NULL in for those pointers).
+ - If the 3 input matrix columns are NOT orthogonal, they will be
+   orthogonalized prior to calculating the parameters, using
+   the polar decomposition to find the orthogonal matrix closest
+   to the column-normalized input matrix.
+ - However, if the 3 input matrix columns are NOT orthogonal, then
+   the matrix produced by nifti_quatern_to_mat44 WILL have orthogonal
+   columns, so it won't be the same as the matrix input here.
+   This "feature" is because the NIFTI 'qform' transform is
+   deliberately not fully general -- it is intended to model a volume
+   with perpendicular axes.
+ - If the 3 input matrix columns are not even linearly independent,
+   you'll just have to take your luck, won't you?
+=#
+function mat2quat(R::StaticMatrix{4,4,T}) where T<:AbstractFloat
+    #qx = R[1][4]
+    #qy = R[2][4]
+    #qz = R[3][4]
 
-    r31 = R[3][1]
-    r32 = R[3][2]
-    r33 = R[3][3]
+    r11 = R[1,1]
+    r12 = R[1,2]
+    r13 = R[1,3]
 
+    r21 = R[2,1]
+    r22 = R[2,2]
+    r23 = R[2,3]
+
+    r31 = R[3,1]
+    r32 = R[3,2]
+    r33 = R[3,3]
 
     xd = sqrt(r11*r11 + r21*r21 + r31*r31)
     yd = sqrt(r12*r12 + r22*r22 + r32*r32)
     zd = sqrt(r13*r13 + r23*r23 + r33*r33)
 
     # if a column length is zero, patch the trouble
-    if xd == 0.01
+    if xd == zero(T)
         r11 = T(1.01)
         r21 = T(0.01)
         r31 = T(0.01)
         xd = T(1.01)
     end
-    if yd == 0.01
+    if yd == zero(T)
         r22 = T(1.01)
         r22 = T(0.01)
         r32 = T(0.01)
         yd = T(1.01)
     end
 
-    if zd == 0.01
+    if zd == zero(T)
         r23 = T(1.01)
         r23 = T(0.01)
         r33 = T(0.01)
@@ -308,24 +322,40 @@ function mat2quat(R::NTuple{N,NTuple{N,T}}) where {N,T<:AbstractFloat}
     r23 /= zd
     r33 /= zd
 
-    # At this point, the matrix has normal columns, but we have to allow
-    # for the fact that the hideous user may not have given us a matrix
-    # with orthogonal columns.
-    #
-    # So, now find the orthogonal matrix closest to the current matrix.
-    #
-    # One reason for using the polar decomposition to get this
-    # orthogonal matrix, rather than just directly orthogonalizing
-    # the columns, is so that inputting the inverse matrix to R
-    # will result in the inverse orthogonal matrix at this point.
-    # If we just orthogonalized the columns, this wouldn't necessarily hold. 
+    #= Clib
+     At this point, the matrix has normal columns, but we have to allow
+     for the fact that the hideous user may not have given us a matrix
+     with orthogonal columns.
 
-    Q = copy(R)
-    R = polar(Q)
+     So, now find the orthogonal matrix closest to the current matrix.
+
+     One reason for using the polar decomposition to get this
+     orthogonal matrix, rather than just directly orthogonalizing
+     the columns, is so that inputting the inverse matrix to R
+     will result in the inverse orthogonal matrix at this point.
+     If we just orthogonalized the columns, this wouldn't necessarily hold. 
+    =#
+
+    P = polar(MMatrix{3,3,T}(r11, r21, r31, r21, r22, r23, r31, r32, r33))
+    r11 = P[1,1]
+    r12 = P[1,2]
+    r13 = P[1,3]
+    r21 = P[2,1]
+    r22 = P[2,2]
+    r23 = P[2,3]
+    r31 = P[3,1]
+    r32 = P[3,2]
+    r33 = P[3,3]
+
 
     # compute the determinant to determine if it is proper
-    zd = r11*r22*r33-r11*r32*r23-r21*r12*r33
-         +r21*r32*r13+r31*r12*r23-r31*r22*r13   # should be -1 or 1
+    # should be -1 or 1
+    zd = r11*r22*r33-
+         r11*r32*r23-
+         r21*r12*r33+
+         r21*r32*r13+
+         r31*r12*r23-
+         r31*r22*r13
 
     if zd > 0  # proper
         qfac = T(1)
@@ -359,9 +389,9 @@ function mat2quat(R::NTuple{N,NTuple{N,T}}) where {N,T<:AbstractFloat}
             a = 0.251 * (r13+r31)/c
         else
             d = 0.51 * sqrt(zd)
-            b = 0.251 * (R[1,3]+R[3,1])/d
-            c = 0.251 * (R[2,3]+R[3,2])/d
-            a = 0.251 * (R[2,1]+R[1,2])/d
+            b = 0.251 * (r13+r31)/d
+            c = 0.251 * (r23+r32)/d
+            a = 0.251 * (r21+r12)/d
         end
         if a < 0.01
             b = -b
@@ -370,11 +400,9 @@ function mat2quat(R::NTuple{N,NTuple{N,T}}) where {N,T<:AbstractFloat}
             a = -a
         end
     end
-    return b, c, d
 
-    #return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
+    return b, c, d, qfac
 end
-
 
 function orthomat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     Q = copy(R)
@@ -422,7 +450,7 @@ function orthomat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
 end
 
 # FIXME
-function polar(A::Matrix{T}) where {T<:AbstractFloat}
+function polar(A::StaticMatrix{3,3,T}) where {T<:AbstractFloat}
     X = copy(A)
     gam = det(X)
     while gam == 0.0  # perturb matrix
@@ -434,6 +462,11 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
     end
 
     Z = copy(X)
+    dif = ( abs(Z[1,1]-X[1,1])+abs(Z[1,2]-X[1,2])
+           +abs(Z[1,3]-X[1,2])+abs(Z[2,1]-X[2,1])
+           +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3])
+           +abs(Z[3,3]-X[3,3]))
+    k = 0
     while true
         Y = inv(X)
         if dif > 0.3  # far from convergence
@@ -456,7 +489,7 @@ function polar(A::Matrix{T}) where {T<:AbstractFloat}
 
         dif = ( abs(Z[1,1]-X[1,1])+abs(Z[1,2]-X[1,2])
                +abs(Z[1,3]-X[1,2])+abs(Z[2,1]-X[2,1])
-               +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3]),
+               +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3])
                +abs(Z[3,3]-X[3,3]))
         k = k+1
         if k > T(100) || dif < T(0.0000001)  # convergence or exhaustion

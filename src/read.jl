@@ -42,19 +42,17 @@ function nistreaming(io::IO, f::String)
     if isgz(io)
         gzs = gzdopen(io)
         s = readhdr(gzs)
-        s["filename"] = [f]
+        s["filename"] = f
         if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
-            append!(s["filenames"], getimg(s["filenames"]))
             close(s.io)
-            s.io = gzdopen(s["filenames"][2])
+            s.io = gzdopen(open(getimg(s["filename"])))
         end
     else
         s = readhdr(io)
-        s["filename"] = [f]
+        s["filename"] = f
         if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
-            append!(s["filenames"], getimg(s["filenames"]))
             close(s.io)
-            s.io = open(s["filenames"][2])
+            s.io = open(getimg(s["filename"]))
         end
     end
     return s
@@ -126,17 +124,19 @@ function readhdr1(s::IOMeta)
     s["header"]["sliceduration"] = read(s, Float32)
     toffset = read(s, Float32)
 
-
-
     skip(s, 8)
     s["description"] = String(read(s, 80))
-    s["auxfile"] = String(read(s, 24))
+    s["auxfiles"] = [String(read(s, 24))]
 
     s["header"]["qformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
     s["header"]["sformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
-    s["header"]["qform"] = qform(s["header"]["qformcode"],
-                                 read!(s, Vector{Float32}(undef, 6))...,
-                                 pixdim[1], pixdim[2], pixdim[3], qfac)
+    s["header"]["quatern_b"] = read(s, Float32)
+    s["header"]["quatern_c"] = read(s, Float32)
+    s["header"]["quatern_d"] = read(s, Float32)
+    s["header"]["qoffsetx"] = read(s, Float32)
+    s["header"]["qoffsety"] = read(s, Float32)
+    s["header"]["qoffsetz"] = read(s, Float32)
+
     # FIXME
     s["header"]["sform"] = permutedims(SArray{Tuple{4,4},Float32,2,16}(
                                         (read!(s, Vector{Float32}(undef, 12))...,
@@ -145,9 +145,8 @@ function readhdr1(s::IOMeta)
     s["header"]["magic"] = (read(s, 4)...,)
 
     if s["header"]["sformcode"] ==  :Unkown
-        s["spacedirections"] = (Tuple(s["header"]["qform"][1,1:3]),
-                                Tuple(s["header"]["qform"][2,1:3]),
-                                Tuple(s["header"]["qform"][3,1:3]))
+        qf = qform(s)
+        s["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
     else
         s["spacedirections"] = (Tuple(s["header"]["sform"][1,1:3]),
                                 Tuple(s["header"]["sform"][2,1:3]),
@@ -172,7 +171,7 @@ function readhdr2(s::IOMeta)
 
     s["header"]["intentparams"] = (read!(s, Vector{Float64}(undef, 3))...,)
 
-    qfac = read(s, Float64)  # FIXME: qfac is first dimension of otherwise unused pixdim[1]
+    qfac = read(s, Float64)
     pixdim = (read!(s, Vector{Float64}(undef, N))...,)
     skip(s, (7-N)*8)  # skip filler dims
 
@@ -188,11 +187,17 @@ function readhdr2(s::IOMeta)
     s["header"]["slicestart"] = read(s, Int64) + 1  # to 1 based indexing
     s["header"]["sliceend"] = read(s, Int64) + 1
     s["description"] = String(read(s, 80))
-    s["auxfile"] = String(read(s, 24))
+    s["auxfiles"] = [String(read(s, 24))]
     s["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
     s["header"]["sformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
 
-    s["header"]["qform"] = qform(s["header"]["qformcode"], read!(s, Vector{Float64}(undef, 6))..., pixdim[1], pixdim[2], pixdim[3], qfac)
+    s["header"]["quatern_b"] = read(s, Float64)
+    s["header"]["quatern_c"] = read(s, Float64)
+    s["header"]["quatern_d"] = read(s, Float64)
+    s["header"]["qoffsetx"] = read(s, Float64)
+    s["header"]["qoffsety"] = read(s, Float64)
+    s["header"]["qoffsetz"] = read(s, Float64)
+
     s["header"]["sform"] = transpose(
                                    SMatrix{4,4,Float64,16}(
                                         (read!(s, Vector{Float64}(undef, 12))..., 0.0, 0.0, 0.0, 1.0)))
@@ -206,9 +211,8 @@ function readhdr2(s::IOMeta)
     skip(s, 15)
 
     if s["header"]["sformcode"] ==  :Unkown
-        s["spacedirections"] = (Tuple(s["header"]["qform"][1,1:3]),
-                                Tuple(s["header"]["qform"][2,1:3]),
-                                Tuple(s["header"]["qform"][3,1:3]))
+        qf = qform(s)
+        s["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
     else
         s["spacedirections"] = (Tuple(s["header"]["sform"][1,1:3]),
                                 Tuple(s["header"]["sform"][2,1:3]),

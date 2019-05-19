@@ -114,7 +114,8 @@ slicestart(A::AbstractArray) = 1
 Which slice corresponds to the last slice acquired during MRI acquisition
 (i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
 """
-sliceend(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = _sliceend(properties(img), size(img, slice_dim(img)))
+sliceend(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} =
+    _sliceend(properties(img), size(img, slicedim(img)))
 sliceend(s::ImageStream) = _sliceend(properties(s), size(s, slicedim(s)))
 _sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", slice_dim_size)
 sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
@@ -123,35 +124,52 @@ sliceend(A::AbstractArray) = size(A, ndims(A))
 """
     qform(img)
 """
+#=
 qform(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = qform(properties(img))
 qform(s::ImageStream) = qform(properties(s))
 qform(p::ImageProperties) = getheader(p, "qform", qform())
-qform(A::AbstractArray) = qform()
-function qform()
-    SMatrix{4,4,Float64,16}(1.0, 0.0, 0.0, 0.0,
-                            0.0, 1.0, 0.0, 0.0,
-                            0.0, 0.0, 1.0, 0.0,
-                            0.0, 0.0, 0.0, 1.0)
+=#
+function qform(s::Union{ImageStream,AbstractArray})
+    qb, qc, qd, qfac = mat2quat(sform(s))
+    return qform(qb, qc, qd, qoffsetx(s), qoffsety(s), qoffsetz(s),
+                 ustrip.(pixelspacing(s))..., qfac)
 end
+
+# These are stored in the `properties["header"]["qoffset*"]` fields, so they can be used
+# if desired but are not integrated into spacedirections because it's unlikely that we want
+# to offset every single image axis by a couple of millimeters
+
+qoffsetx(s::Union{ImageStream,AbstractArray}) =
+    getheader(s, "qoffsetx", ustrip(axesoffsets(s, 1)))
+qoffsety(s::Union{ImageStream,AbstractArray}) =
+    getheader(s, "qoffsety", ustrip(axesoffsets(s, 2)))
+qoffsetz(s::Union{ImageStream,AbstractArray}) =
+    getheader(s, "qoffsetz", ustrip(axesoffsets(s, 3)))
 
 """
     sform(A)
+
+The 4th column of the matrix is the offset of the affine matrix.
+This is primarily included for the purpose of compatibility with DICOM formats, where the
+"Image Position" stores the coordinates of the center of the first voxel
+(see the [DICOM standard](http://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.7.6.2.html#sect_C.7.6.2.1.1) for more details;
+Note, these values should be in interpreted as 'mm').
 """
 # may just drop sform as property and always grab from spacedirections in future
-sform(img::Union{AbstractArray,ImageStream}) = _sform(spacedirections(img))
+sform(img::Union{AbstractArray,ImageStream}) = _sform(img, spacedirections(img))
 
-function _sform(sd::Tuple{Ax1,Ax2,Ax3}) where {Ax1,Ax2,Ax3}
-    SMatrix{4,4,eltype(Ax1),16}(sd[1]...,      0.0,
-                               sd[2]...,      0.0,
-                               sd[3]...,      0.0,
-                               0.0, 0.0, 0.0, 1.0)
+function _sform(img, sd::Tuple{Ax1,Ax2,Ax3}) where {Ax1,Ax2,Ax3}
+    SMatrix{4,4,eltype(Ax1),16}([[sd[1]..., qoffsetx(img)]'
+                                 [sd[2]..., qoffsety(img)]'
+                                 [sd[3]..., qoffsetz(img)]'
+                                 [0.0, 0.0, 0.0, 1.0]'])
 end
 
-function _sform(sd::Tuple{Ax1,Ax2}) where {Ax1,Ax2}
-    SMatrix{4,4,eltype(Ax1),16}(sd[1]..., 0.0, 0.0,
-                                sd[2]..., 0.0, 0.0,
-                                0.0, 0.0, 0.0, 0.0,
-                                0.0, 0.0, 0.0, 1.0)
+function _sform(img, sd::Tuple{Ax1,Ax2}) where {Ax1,Ax2}
+    SMatrix{4,4,eltype(Ax1),16}([[sd[1]..., qoffsetx(img)]'
+                                 [sd[2]..., qoffsety(img)]'
+                                 [0.0, 0.0, 0.0, 0.0]'
+                                 [0.0, 0.0, 0.0, 1.0]'])
 end
 
 """
@@ -204,36 +222,17 @@ function voxoffset(s::ImageStream, v::Val{2})
 end
 
 # Gets dim to be used in header
-function nidim(x::ImageStream)
-    dim = ones(Int16, 8)
-    dim[1] = ndims(x)
-    dim[2:dim[1]+1] = [size(x)...]
-    return dim
-end
+nidim(x::ImageStream{T,N}) where {T,N} = [N, size(x)..., fill(1, 8-(N+1))...]
 
-function pixdim0(::Type{T}, s::ImageStream) where T
-    if axisnames(s, 1) == :L2R
-        return T(1)
-    elseif axisnames(s, 1) == :R2L
-        return T(-1)
-    else
-        return T(0)
-    end
-end
-
-pixdim(s::ImageStream) = _pixdim(typeof(ustrip(axes(s, 1).val[1])), s)
-_pixdim(::Type{AxT}, s::ImageStream{T,N}) where {AxT,T,N} =
-    [pixdim0(AxT, s), map(i->ustrip(step(i.val)), axes(s))..., fill(AxT(1), 8-(N+1))...]
+pixdim(s::ImageStream{T,N}, qfac::T2) where {T,N,T2} =
+    [qfac, map(i->T2(ustrip(step(i.val))), axes(s))..., fill(T2(1), 8-(N+1))...]
 
 function xyztunits(s::ImageStream)
     (get(NiftiUnitsReverse, spatunits(s)[1], Int16(0)) & 0x07) |
     (get(NiftiUnitsReverse,    timeunits(s), Int16(0)) & 0x38)
 end
 
-function toffset(s::ImageStream{T,N}) where {T,N}
-    if N < 4
-        return 0
-    else
-        ustrip(timeaxis(s)[1])
-    end
-end
+toffset(s::ImageStream{T,1}) where T = 0
+toffset(s::ImageStream{T,2}) where T = 0
+toffset(s::ImageStream{T,3}) where T = 0
+toffset(s::ImageStream{T,N}) where {T,N} = ustrip(firstindex(axes(s, )))

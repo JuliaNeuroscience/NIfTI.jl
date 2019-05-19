@@ -68,6 +68,9 @@ macro get(p, k, default)
     end
 end
 
+getheader(A::AbstractArray, k::String, default) = default
+getheader(img::ImageMeta{T,N,A,<:ImageProperties}, k::String, default) where {T,N,A} =
+    getheader(properties(img), k, default)
 getheader(p::ImageProperties, k::String, default) = getheader(header(p), k, default)
 getheader(p::ImageProperties{:header}, k::String, default) = @get p k default
 getheader(::Nothing, k::String, default) = default

@@ -57,7 +57,7 @@ header(a::AbstractArray) = nothing
 
 Retrieves description field that may say whatever you like.
 """
-description(p::ImageProperties) = get(p, "description", "")
+description(p::Union{ImageProperties,ImageMeta}) = get(p, "description", "")
 description(a::AbstractArray) = ""
 
 """
@@ -124,7 +124,8 @@ spataxes(s::ImageStream) = map(i->axes(s, i), coords_spatial(s))
 Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If
 not available `nothing` is returned for each spatial axis.
 """
-spatunits(a::Union{AbstractArray,ImageStream}) = map(i->unit(i.val[1]), spataxes(a)) # TODO: handle non unitful
+spatunits(a::Union{AbstractArray,ImageStream}) =
+    map(i->unit(i[1]), spataxes(a))  # TODO: handle non unitful
 
 """
     timeunits(img)
