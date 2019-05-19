@@ -1,27 +1,47 @@
 """
-auxfile(d)
+    auxfiles(p)
 
 Retrieves string for auxiliary file associated with the image.
 """
-auxfile(d::ImageProperties) = @get d "auxfile" ""
-auxfile(A::AbstractArray) = ""
+auxfiles(p::ImageProperties) = @get p "auxfiles" [""]
+auxfiles(A::AbstractArray) = [""]
 
 """
-    data_offset(d)
+    data_offset(p)
 """
-data_offset(d::ImageProperties) = get(d, "data_offset", 0)::Int
+data_offset(p::ImageProperties) = get(p, "data_offset", 0)::Int
 data_offset(A::AbstractArray) = 0
 
 """
-    filenames(d)
+    data_offset!(p, n)
+
+Change data_offset defined in an `ImageProperties` type.
+"""
+function data_offset!(p::ImageProperties, n::Int)
+    p["data_offset"] = n
+end
+
+"""
+    filename(p)
 
 File names used to read in image.
 """
-filenames(d::ImageProperties) = get(d, "filenames", String[])
-filenames(A::AbstractArray) = String[]
+filename(p::ImageProperties) = @get p "filename" ""
+filename(A::AbstractArray) = ""
+
+"""
+    filename!(p, file)
+
+Change filename defined in an `ImageProperties` type.
+"""
+function filename!(p::ImageProperties, file::String)
+    p["filename"] = file
+end
 
 """
     modality(d)
+
+Returns image modality that corresponds to a given `ImageProperties` instance.
 """
 modality(d::ImageProperties) = get(d, "modality", "")::String
 modality(a::AbstractArray) = ""
@@ -33,18 +53,26 @@ header(d::ImageProperties) = get(d, "header", nothing)
 header(a::AbstractArray) = nothing
 
 """
-description(d)
+    description(p)
 
 Retrieves description field that may say whatever you like.
 """
-description(d::ImageProperties) = get(d, "description", "")
+description(p::ImageProperties) = get(p, "description", "")
 description(a::AbstractArray) = ""
+
+"""
+    description!(p, descrip)
+
+Change description defined in an `ImageProperties` type.
+"""
+function description!(p::ImageProperties, descrip::String)
+    p["descrip"] = descrip
+end
 
 """
     calmax
 
 Specifies maximum element for display puproses
-
 """
 calmax(d::ImageProperties) = get(d, "calmax", 1)
 calmax(a::AbstractArray{T}) where T = maximum(a)
@@ -68,7 +96,7 @@ function metafy(::Type{T}) where T
         Base.keys(d::$T) = keys(properties(d))
 
 
-        auxfile(d::$T) = auxfile(properties(d))
+        auxfiles(d::$T) = auxfiles(properties(d))
         header(d::$T) = header(properties(d))
         description(d::$T) = description(properties(d))
         data_offset(d::$T) = data_offset(properties(d))

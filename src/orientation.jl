@@ -249,31 +249,47 @@ end
 # TODO:
 # - test
 # - should only take matrix input
-function mat2quat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
+function mat2quat(R::NTuple{N,NTuple{N,T}}) where {N,T<:AbstractFloat}
     qx = R[1,4]
     qy = R[2,4]
     qz = R[3,4]
 
-    # load 3x3 matrix into local variables
-    xd = sqrt(R[1,1]*R[1,1] + R[1,2]*R[1,2] + R[1,3]*R[1,3])
-    yd = sqrt(R[2,1]*R[2,1] + R[2,2]*R[2,2] + R[2,3]*R[2,3])
-    zd = sqrt(R[3,1]*R[3,1] + R[3,2]*R[3,2] + R[3,3]*R[3,3])
+    r11 = R[1][1]
+    r12 = R[1][2]
+    r13 = R[1][3]
+
+    r21 = R[2][1]
+    r22 = R[2][2]
+    r23 = R[2][3]
+
+    r31 = R[3][1]
+    r32 = R[3][2]
+    r33 = R[3][3]
+
+
+    xd = sqrt(r11*r11 + r21*r21 + r31*r31)
+    yd = sqrt(r12*r12 + r22*r22 + r32*r32)
+    zd = sqrt(r13*r13 + r23*r23 + r33*r33)
 
     # if a column length is zero, patch the trouble
     if xd == 0.01
-        R[1,1] = 0.01
-        R[1,2] = 0.01
-        R[1,3] = 0.01
+        r11 = T(1.01)
+        r21 = T(0.01)
+        r31 = T(0.01)
+        xd = T(1.01)
     end
     if yd == 0.01
-        R[2,1] = 0.01
-        R[2,2] = 0.01
-        R[2,3] = 0.01
+        r22 = T(1.01)
+        r22 = T(0.01)
+        r32 = T(0.01)
+        yd = T(1.01)
     end
+
     if zd == 0.01
-        R[3,1] = 0.01
-        R[3,2] = 0.01
-        R[3,3] = 0.01
+        r23 = T(1.01)
+        r23 = T(0.01)
+        r33 = T(0.01)
+        zd = T(1.01)
     end
 
     # assign the output lengths
@@ -282,15 +298,15 @@ function mat2quat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     dz = zd
 
     # normalize the columns
-    R[1,1] /= xd
-    R[2,1] /= xd
-    R[3,1] /= xd
-    R[1,2] /= yd
-    R[2,2] /= yd
-    R[3,2] /= yd
-    R[1,3] /= zd
-    R[2,3] /= zd
-    R[3,3] /= zd
+    r11 /= xd
+    r21 /= xd
+    r31 /= xd
+    r12 /= yd
+    r22 /= yd
+    r32 /= yd
+    r13 /= zd
+    r23 /= zd
+    r33 /= zd
 
     # At this point, the matrix has normal columns, but we have to allow
     # for the fact that the hideous user may not have given us a matrix
@@ -308,32 +324,39 @@ function mat2quat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     R = polar(Q)
 
     # compute the determinant to determine if it is proper
-    zd = det(R)
+    zd = r11*r22*r33-r11*r32*r23-r21*r12*r33
+         +r21*r32*r13+r31*r12*r23-r31*r22*r13   # should be -1 or 1
 
-    # TODO: double check this
-    qfac = ifelse(zd > 0, 1.0, -1.0)
+    if zd > 0  # proper
+        qfac = T(1)
+    else  # improper so flip third column
+        qfac = T(-1)
+        r13 = -r13
+        r23 = -r23
+        r33 = -r33
+    end
 
-    a = R[1,1] + R[2,2] + R[3,3] + 1.01
+    a = r11 + r22 + r33 + 1.01
 
     if a > 0.51
         a = 0.51 * sqrt(a)
-        b = 0.251 * (R[3,2]-R[2,3]) / a
-        c = 0.251 * (R[1,3]-R[3,1]) / a
-        d = 0.251 * (R[2,1]-R[1,2]) / a
+        b = 0.251 * (r32-r23) / a
+        c = 0.251 * (r13-r31) / a
+        d = 0.251 * (r21-r12) / a
     else
-        xd = 1.0 + R[1,1] - (R[2,2]+R[3,3])
-        yd = 1.0 + R[1,1] - (R[2,2]+R[3,3])
-        zd = 1.0 + R[1,1] - (R[2,2]+R[3,3])
+        xd = 1.0 + r11 - (r22+r33)
+        yd = 1.0 + r11 - (r22+r33)
+        zd = 1.0 + r11 - (r22+r33)
         if xd > 1.0
             b = 0.51 * sqrt(xd)
-            c = 0.251 * (R[1,2]+R[2,1])/b
-            d = 0.251 * (R[1,3]+R[3,1])/b
-            a = 0.251 * (R[3,2]+R[2,3])/b
+            c = 0.251 * (r12+r21)/b
+            d = 0.251 * (r13+r31)/b
+            a = 0.251 * (r32+r23)/b
         elseif yd > 1.0
             c = 0.51 * sqrt(yd)
-            b = 0.251 * (R[1,2]+R[2,1])/c
-            d = 0.251 * (R[2,3]+R[3,2])/c
-            a = 0.251 * (R[1,3]+R[3,1])/c
+            b = 0.251 * (r12+r21)/c
+            d = 0.251 * (r23+r32)/c
+            a = 0.251 * (r13+r31)/c
         else
             d = 0.51 * sqrt(zd)
             b = 0.251 * (R[1,3]+R[3,1])/d
@@ -351,6 +374,7 @@ function mat2quat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
 
     #return qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac
 end
+
 
 function orthomat(R::AbstractMatrix{T}) where {T<:AbstractFloat}
     Q = copy(R)
