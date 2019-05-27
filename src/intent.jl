@@ -153,12 +153,12 @@ intentaxis(s::AbstractArray, ::Type{GiftiRGB}) = Axis{:colordim}(1:3)
 intentaxis(s::AbstractArray, ::Type{GiftiRGBA}) = Axis{:colordim}(1:4)
 
 function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
-                pixdim::NTuple{N}, s::IOMeta) where {N,F}
+                pixdim::NTuple{N}, p::ImageProperties) where {N,F}
    # determine axisnames
-    if s["header"]["sformcode"] != :Unkown
-       ori = orientation(s["header"]["sform"])
+    if p["header"]["sformcode"] != :Unkown
+       ori = orientation(p["header"]["sform"])
     else
-        ori = orientation(s["header"]["qform"])
+        ori = orientation(p["header"]["qform"])
     end
 
     su = get(NiftiUnits, xyzt_units & 0x07, 1)
@@ -183,7 +183,7 @@ function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
         axs[4] = Axis{:time}(range(toffset, step=pixdim[4], length=sz[4])*tu)
     end
     if N > 4
-        append!(axs, intentaxis(s, pixdim, s["header"]["intent"]))
+        append!(axs, intentaxis(p, pixdim, p["header"]["intent"]))
     end
     if N > 5
         for i in 6:N
@@ -193,7 +193,7 @@ function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
     return (axs...,)
 end
 
-intentaxis(s, pixdim, ::Type) = Axis{:dim5}(range(Float64(1), step=s.pixdim[5], length=s.size[5]))
+intentaxis(s, pixdim, ::Type) = Axis{:dim5}(range(Float64(1), step=pixdim[5], length=size[5]))
 intentaxis(s, pixdim, ::Type{SMatrix}) = [Axis{:col}(Base.OneTo(intentparams(s)[2])), Axis{:row}(Base.OneTo(intentparams(s)[1]))]
 intentaxis(s, pixdim, ::Type{Triangle}) = Axis{:triangledim}(1:3)
 intentaxis(s, pixdim, ::Type{Point}) = Axis{:pointdim}(1:3)

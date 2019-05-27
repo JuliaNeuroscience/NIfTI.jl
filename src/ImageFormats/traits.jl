@@ -36,21 +36,34 @@ Change filename defined in an `ImageProperties` type.
 """
 function filename!(p::ImageProperties, file::String)
     p["filename"] = file
+    return file
 end
 
 """
-    modality(d)
+    modality(p)
 
 Returns image modality that corresponds to a given `ImageProperties` instance.
 """
-modality(d::ImageProperties) = get(d, "modality", "")::String
+modality(p::ImageProperties) = get(p, "modality", "")::String
 modality(a::AbstractArray) = ""
 
 """
-    header(d)
+    header(p)
 """
-header(d::ImageProperties) = get(d, "header", nothing)
+header(p::ImageProperties) = get(p, "header", nothing)
 header(a::AbstractArray) = nothing
+
+"""
+    popheader!(p, key, default)
+"""
+popheader!(p::ImageProperties, key::String, default) = pop!(header(d), key, default)
+popheader!(p::ImageProperties, key::String) = pop!(header(p), key)
+
+"""
+    pushheader(d, kv)
+"""
+pushheader!(d::ImageProperties, kv::Pair{String}) = push!(header())
+pushheader!(d::ImageProperties, kv) = insert!(header(d), kv[1], kv[2])
 
 """
     description(p)
@@ -70,12 +83,21 @@ function description!(p::ImageProperties, descrip::String)
 end
 
 """
-    calmax
+    calmax(p)
 
 Specifies maximum element for display puproses
 """
-calmax(d::ImageProperties) = get(d, "calmax", 1)
+calmax(p::ImageProperties) = get(p, "calmax", 1)
 calmax(a::AbstractArray{T}) where T = maximum(a)
+
+"""
+    calmax!(p, val)
+
+Change calmax defined in an `ImageProperties` type.
+"""
+function calmax!(p::ImageProperties, val)
+    p["calmax"] = val
+end
 
 """
     calmin
@@ -85,29 +107,59 @@ Specifies minimum element for display puproses
 calmin(d::ImageProperties) = get(d, "calmin", -1)
 calmin(a::AbstractArray{T}) where T = minimum(a)
 
-# this allows 
-function metafy(::Type{T}) where T
+"""
+    calmin!(p, val)
+
+Change calmin defined in an `ImageProperties` type.
+"""
+function calmin!(p::ImageProperties, val)
+    p["calmin"] = val
+end
+
+function forward_properties(::Type{A}) where A
+    # TODO
+    hasmethod(properties, Tuple{A}) || error("$A must have the method `properties` defined
+                                             to forward properties methods.")
     @eval begin
-        Base.get(d::$T, k::String, v) = get(properties(d), k, v)
-        Base.get!(f::Function, d::$T, key::String) = get!(f, properties(d), key)
-        Base.setindex!(d::$T, val, key::String) = setindex!(properties(d), val, key)
-        Base.getindex(d::$T, key::String) = getindex(properties(d), key)
-        Base.haskey(d::$T, k::String) = haskey(properties(d), k)
-        Base.keys(d::$T) = keys(properties(d))
+        Base.get(d::$A, k::String, v) = get(properties(d), k, v)
+        Base.get!(f::Function, d::$A, key::String) = get!(f, properties(d), key)
+
+        Base.setindex!(d::$A, val, key::String) = setindex!(properties(d), val, key)
+        Base.getindex(d::$A, key::String) = getindex(properties(d), key)
+
+        Base.haskey(d::$A, k::String) = haskey(properties(d), k)
+        Base.keys(d::$A) = keys(properties(d))
+        Base.getkey(d::$A, key, default) = getkey(properties(d), key, default)
+
+        Base.delete!(d::$A, k::String) = (delete!(properties(d), k); d)
 
 
-        auxfiles(d::$T) = auxfiles(properties(d))
-        header(d::$T) = header(properties(d))
-        description(d::$T) = description(properties(d))
-        data_offset(d::$T) = data_offset(properties(d))
-        modality(d::$T) = modality(properties(d))
-        calmax(d::$T) = calmax(properties(d))
-        calmin(d::$T) = calmin(properties(d))
+        auxfiles(d::$A) = auxfiles(properties(d))
+        header(d::$A) = header(properties(d))
+
+        description(d::$A) = description(properties(d))
+        description!(d::$A, descrip::String) = description!(properties(d), descript)
+
+
+        filename(d::$A) = filename(properties(d))
+        filename!(d::$A, file::String) = filename!(properties(d), file)
+
+        data_offset(d::$A) = data_offset(properties(d))
+        data_offset!(d::$A, n::Int) = data_offset!(properties(d), n)
+
+        modality(d::$A) = modality(properties(d))
+
+        calmax(d::$A) = calmax(properties(d))
+        calmax!(d::$A, val) = calmax!(properties(d), val)
+
+        calmin(d::$A) = calmin(properties(d))
+        calmin!(d::$A, val) = calmin!(properties(d), val)
+
     end
 end
 
-metafy(IOMeta)
-metafy(ImageStream)
+forward_properties(IOMeta)
+forward_properties(ImageStream)
 
 """
     spataxes(img)
@@ -141,3 +193,5 @@ function timeunits(a::Union{AbstractArray,ImageStream})
         return unit(ta[1])
     end
 end
+
+

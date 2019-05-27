@@ -67,3 +67,59 @@ function isneuroview(axnames::String)
     axnames == "right-anterior-superior" | axnames == "right-anterior-superior-time"
 end
 
+getaffine(img::Union{AbstractArray,ImageStream}) =
+    AffineMap(getlinear(img), gettranslation(img))
+
+# linear component of AffineMap
+getlinear(img::Union{AbstractArray,ImageStream}) =
+    _getlinear(spacedirections(img))
+
+function _getlinear(sd::NTuple{2,NTuple{2,T}}) where T
+    SMatrix{3,3,T}(sd[1][1], sd[2][1],
+                   sd[1][2], sd[2][2])
+end
+
+function _getlinear(sd::NTuple{3,NTuple{3,T}}) where T
+    SMatrix{3,3,T}(sd[1][1], sd[2][1], sd[3][1],
+                   sd[1][2], sd[2][2], sd[3][2],
+                   sd[1][3], sd[2][3], sd[3][3])
+end
+
+# translation component of AffineMap
+gettranslation(img::Union{AbstractArray,ImageStream}) =
+    SVector(ustrip.(first.(axisvalues(img)[1:sdims(img)])))
+
+# quaternion of spacedirections
+getquat(img::Union{AbstractArray,ImageStream}) = _getquat(getlinear(img))
+
+function _getquat(sd::SMatrix{2,2,T}) where T<:AbstractFloat
+    _getquat(SMatrix{3,3,T}(sd[1:2, 1]..., zero(T),
+                            sd[1:2, 2]..., zero(T),
+                            zero(T),  zero(T),  one(T)))
+end
+
+_getquat(sd::StaticMatrix{3,3,T}) where T<:AbstractFloat = Quat(sd)
+
+_getquat(sd::NTuple{N,NTuple{N,T}}) where {N,T} = _getquat(map(i->float.(i), sd))
+
+getaffinemat(img::Union{AbstractArray,ImageStream}) =
+    _getaffinemat(getlinear(img), gettranslation(img))
+
+
+function _getaffinemat(lin::SMatrix{N,N,Tlin}, trans::SVector{N,Ttrans}) where {N,Tlin,Ttrans}
+    T = promote_type(Tlin, Ttrans)
+    _getaffinemat(T.(lin), T.(trans))
+end
+
+function _getaffinemat(lin::SMatrix{2,2,T}, trans::SVector{2,T}) where T
+    SMatrix{3,3,T}(lin[1:3, 1]..., zero(T),
+                   lin[1:3, 2]..., zero(T),
+                   trans..., sign(det(lin)))
+end
+
+function _getaffinemat(lin::SMatrix{3,3,T}, trans::SVector{3,T}) where T
+    SMatrix{4,4,T}(lin[1:3, 1]..., zero(T),
+                   lin[1:3, 2]..., zero(T),
+                   lin[1:3, 3]..., zero(T),
+                   trans..., sign(det(lin)))
+end

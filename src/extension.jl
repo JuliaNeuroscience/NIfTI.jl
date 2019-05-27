@@ -90,7 +90,7 @@ extension(p::ImageProperties) = getheader(p, "extension", NiftiExtension[])
 extension(A::AbstractArray) = NiftiExtension[]
 
 
-function read(io::IOMeta, ::Type{NiftiExtension})
+function read(io::IO, p::ImageProperties, ::Type{NiftiExtension})
     ret = NiftiExtension[]
     if eof(io)
         return ret
@@ -100,7 +100,7 @@ function read(io::IOMeta, ::Type{NiftiExtension})
             return ret
         else
             counter = position(io)
-            while counter < (data_offset(io)-1)
+            while counter < (data_offset(p)-1)
                 esize = read(io, Int32)
                 ec = read(io, Int32)
                 push!(ret, NiftiExtension(ecode(ec), read!(io, Array{UInt8}(undef, esize-8))))

@@ -90,7 +90,6 @@ HasTimeAxis,
 #Base.copy(d::ImageStream) = ImageFormat{F}(deepcopy(properties(d)))
 ##Base.empty(d::ImageStream{F}) where F = ImageStream{F}()
 
-Base.delete!(d::ImageStream, k::String) = (delete!(properties(d), k); d)
 Base.empty!(d::ImageStream) = (empty!(properties(d)); d)
 Base.isempty(d::ImageStream) = isempty(properties(d))
 
@@ -100,9 +99,6 @@ Base.pop!(d::ImageStream, key, default) = pop!(properties(d), key, default)
 Base.pop!(d::ImageStream, key) = pop!(properties(d), key)
 Base.push!(d::ImageStream, kv::Pair) = insert!(properties(d), kv)
 Base.push!(d::ImageStream, kv) = push!(properties(d), kv)
-
-Base.getkey(d::ImageStream, key, default) = getkey(properties(d), key, default)
-Base.get!(f::Function, d::ImageStream, key) = get!(f, properties(d), key)
 
 # I/O Interface #
 FileIO.stream(s::ImageStream) = s.io

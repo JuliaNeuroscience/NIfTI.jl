@@ -28,9 +28,8 @@ end
 function writehdr1(s::ImageStream{T}) where T
                                                               # offset - C name :: Type
                                                               # -----------------------
-
     sf = sform(s)
-    qb, qc, qd, qfac = mat2quat(sf)
+    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquatern(s)
 
     write(s, Int32(348))                                      # 0 - sizeof_hdr::Int32
     # data_type::NTuple{10,UInt8}, db_name::NTuple{18,UInt8},
@@ -77,9 +76,9 @@ function writehdr1(s::ImageStream{T}) where T
     write(s, Float32(qb))                               # 256 - quatern_b::Float32
     write(s, Float32(qc))                               # quatern_c::Float32
     write(s, Float32(qd))                               # quatern_d::Float32
-    write(s, Float32(qoffsetx(s)))                               # qoffset_x::Float32
-    write(s, Float32(qoffsety(s)))                               # qoffset_y::Float32
-    write(s, Float32(qoffsetz(s)))                               # qoffset_z::Float32
+    write(s, Float32(qx))                               # qoffset_x::Float32
+    write(s, Float32(qy))                               # qoffset_y::Float32
+    write(s, Float32(qz))                               # qoffset_z::Float32
     write(s, convert(Array{Float32}, sf[1,1:4]))       # 280 - srows
     write(s, convert(Array{Float32}, sf[2,1:4]))       # 296 - srows
     write(s, convert(Array{Float32}, sf[3,1:4]))       # 312 - srows
@@ -91,7 +90,7 @@ end
 
 function writehdr2(s::ImageStream{T}) where T
     sf = sform(s)
-    qb, qc, qd, qfac = mat2quat(sf)
+    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquattern(s)
 
     write(s, Int32(540))                                 # 0 - sizeof_hdr::Int32
     write(s, [NP2_MAGIC...])                                  # 4 - magic::NTuple{8,UInt8}
@@ -129,9 +128,9 @@ function writehdr2(s::ImageStream{T}) where T
     write(s, Float64(qb))                              # 352 - quatern_b::Float64
     write(s, Float64(qc))                              # 360 - quatern_c::Float64
     write(s, Float64(qd))                              # 368 - quatern_d::Float64
-    write(s, Float64(qoffsetx(s)))                              # 376 - qoffset_x::Float64
-    write(s, Float64(qoffsety(s)))                              # 384 - qoffset_y::Float64
-    write(s, Float64(qoffsetz(s)))                              # 392 - qoffset_z::Float64
+    write(s, Float64(qx))                              # 376 - qoffset_x::Float64
+    write(s, Float64(qy))                              # 384 - qoffset_y::Float64
+    write(s, Float64(qz))                              # 392 - qoffset_z::Float64
 
     write(s, convert(Array{Float64}, sf[1,1:4]))      # 400 - srow_x
     write(s, convert(Array{Float64}, sf[2,1:4]))      # 432 - srow_y

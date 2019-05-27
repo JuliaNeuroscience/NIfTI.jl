@@ -1,3 +1,5 @@
+NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}}} where {T,N,A}
+
 const NiftiSliceCodes = Dict{Int,String}(
     0 => "Unkown",
     1 => "Sequential+Increasing",
@@ -19,8 +21,7 @@ The values stored in each voxel can be scaled, allowing storage of voxels as
 smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
 These values are ignored for RGB(A) data types.
 """
-scaleslope(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = scaleslope(properties(img))
-scaleslope(s::ImageStream) = scaleslope(properties(s))
+scaleslope(img::NiftiFormat) = scaleslope(properties(img))
 scaleslope(p::ImageProperties) = getheader(p, "scaleslope", zero(Float64))::Float64
 scaleslope(A::AbstractArray) = 0.0
 
@@ -31,14 +32,12 @@ The values stored in each voxel can be scaled, allowing storage of voxels as
 smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
 These values are ignored for RGB(A) data types.
 """
-scaleintercept(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = scaleintercept(properties(img))
-scaleintercept(s::ImageStream) = scaleintercept(properties(s))
+scaleintercept(img::NiftiFormat) = scaleintercept(properties(img))
 scaleintercept(p::ImageProperties) = getheader(p, "scaleintercept", zero(Float64))::Float64
 scaleintercept(A::AbstractArray) = 0.0
 
 # dimension info for nifti header
-diminfo(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = diminfo(properties(img))
-diminfo(s::ImageStream) = Int8(0)
+diminfo(img::NiftiFormat) = diminfo(properties(img))
 diminfo(A::AbstractArray) = Int8(0)
 diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
 
@@ -81,8 +80,7 @@ defined:
 * "Alternating+Decreasing#2"
 
 """
-slicecode(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = slicecode(properties(img))
-slicecode(s::ImageStream) = slicecode(properties(s))
+slicecode(img::NiftiFormat) = slicecode(properties(img))
 slicecode(p::ImageProperties) = getheader(p, "slicecode", "Unkown")
 slicecode(A::AbstractArray) = "Unkown"
 
@@ -92,8 +90,7 @@ slicecode(A::AbstractArray) = "Unkown"
 The amount of time necessary to acquire each slice throughout the MRI
 acquisition. Defaults to `0.0`.
 """
-sliceduration(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = sliceduration(properties(img))
-sliceduration(s::ImageStream) = sliceduration(properties(s))
+sliceduration(img::NiftiFormat) = sliceduration(properties(img))
 sliceduration(p::ImageProperties) = getheader(p, "sliceduration", 0.0)
 sliceduration(A::AbstractArray) = 0.0
 
@@ -103,8 +100,7 @@ sliceduration(A::AbstractArray) = 0.0
 Which slice corresponds to the first slice acquired during MRI acquisition
 (i.e. not padded slices). Defaults to `1`.
 """
-slicestart(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = slicestart(properties(img))
-slicestart(s::ImageStream) = slicestart(properties(s))
+slicestart(img::NiftiFormat) = slicestart(properties(img))
 slicestart(p::ImageProperties) = getheader(p, "slicestart", 1)
 slicestart(A::AbstractArray) = 1
 
@@ -114,9 +110,8 @@ slicestart(A::AbstractArray) = 1
 Which slice corresponds to the last slice acquired during MRI acquisition
 (i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
 """
-sliceend(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} =
-    _sliceend(properties(img), size(img, slicedim(img)))
-sliceend(s::ImageStream) = _sliceend(properties(s), size(s, slicedim(s)))
+sliceend(img::NiftiFormat) = _sliceend(properties(img), size(img, slicedim(img)))
+
 _sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", slice_dim_size)
 sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
 sliceend(A::AbstractArray) = size(A, ndims(A))
@@ -129,9 +124,10 @@ qform(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = qform(
 qform(s::ImageStream) = qform(properties(s))
 qform(p::ImageProperties) = getheader(p, "qform", qform())
 =#
-function qform(s::Union{ImageStream,AbstractArray})
+
+function qform(s::NiftiFormat)
     qb, qc, qd, qfac = mat2quat(sform(s))
-    return qform(qb, qc, qd, qoffsetx(s), qoffsety(s), qoffsetz(s),
+    return qform(qformcode(s), qb, qc, qd, qoffsetx(s), qoffsety(s), qoffsetz(s),
                  ustrip.(pixelspacing(s))..., qfac)
 end
 
@@ -139,12 +135,10 @@ end
 # if desired but are not integrated into spacedirections because it's unlikely that we want
 # to offset every single image axis by a couple of millimeters
 
-qoffsetx(s::Union{ImageStream,AbstractArray}) =
-    getheader(s, "qoffsetx", ustrip(axesoffsets(s, 1)))
-qoffsety(s::Union{ImageStream,AbstractArray}) =
-    getheader(s, "qoffsety", ustrip(axesoffsets(s, 2)))
-qoffsetz(s::Union{ImageStream,AbstractArray}) =
-    getheader(s, "qoffsetz", ustrip(axesoffsets(s, 3)))
+qoffsetx(s::NiftiFormat) = getheader(s, "qoffsetx", ustrip(axesoffsets(s, 1)))
+qoffsety(s::NiftiFormat) = getheader(s, "qoffsety", ustrip(axesoffsets(s, 2)))
+qoffsetz(s::NiftiFormat) = getheader(s, "qoffsetz", ustrip(axesoffsets(s, 3)))
+
 
 """
     sform(A)
@@ -156,7 +150,8 @@ This is primarily included for the purpose of compatibility with DICOM formats, 
 Note, these values should be in interpreted as 'mm').
 """
 # may just drop sform as property and always grab from spacedirections in future
-sform(img::Union{AbstractArray,ImageStream}) = _sform(img, spacedirections(img))
+sform(img::Union{NiftiFormat,AbstractArray}) =
+    _sform(img, spacedirections(img))
 
 function _sform(img, sd::Tuple{Ax1,Ax2,Ax3}) where {Ax1,Ax2,Ax3}
     SMatrix{4,4,eltype(Ax1),16}([[sd[1]..., qoffsetx(img)]'
@@ -182,8 +177,7 @@ May be any of the following:
 * Unkown
 * Scanner_anat
 """
-qformcode(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = qformcode(properties(img))
-qformcode(s::ImageStream) = qformcode(properties(s))
+qformcode(img::NiftiFormat) = qformcode(properties(img))
 qformcode(p::ImageProperties) = getheader(p, "qformcode", :Unkown)
 qformcode(A::AbstractArray) = :Unkown
 
@@ -198,8 +192,7 @@ May be any of the following:
 * Talairach
 * MNI152
 """
-sformcode(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = sformcode(properties(img))
-sformcode(s::ImageStream) = sformcode(properties(s))
+sformcode(img::NiftiFormat) = sformcode(properties(img))
 sformcode(p::ImageProperties) = getheader(p, "sformcode", :Unkown)
 sformcode(A::AbstractArray) = :Unkown
 

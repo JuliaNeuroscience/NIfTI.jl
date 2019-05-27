@@ -3,11 +3,12 @@ module ImageFormats
 using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays
 using Unitful: unit, ustrip
 using GeometryTypes: Point
+using LinearAlgebra
 using Rotations: Quat
+using CoordinateTransformations: AffineMap
 using Distributions: TDist,Chi,Chisq,Poisson,FDist,Beta,Binomial,Gamma,Normal,
                      NoncentralT,NoncentralChisq,Logistic,Uniform,NoncentralF,
                      GeneralizedExtremeValue,Distribution
-
 import AxisArrays
 import AxisArrays: AxisArray, Axis, axisnames, axisvalues, axisnames
 import Base: read, read!, write

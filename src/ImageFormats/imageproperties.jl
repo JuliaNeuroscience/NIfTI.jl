@@ -121,18 +121,10 @@ Base.delete!(d::ImageProperties, key::String) = (delete!(properties(d), key); d)
 #Base.empty(d::ImageProperties{F}) where F = ImageProperties{F}()
 Base.isempty(d::ImageProperties) = isempty(properties(d))
 
-Base.in(item, d::ImageProperties) = in(item, properties(d))
-
-Base.pop!(d::ImageProperties, key, default) = pop!(properties(d), key, default)
-Base.pop!(d::ImageProperties, key) = pop!(properties(d), key, Base.secret_table_token)
-Base.push!(d::ImageProperties, kv::Pair) = insert!(d, kv[1], kv[2])
-Base.push!(d::ImageProperties, kv) = insert!(properties(d), kv[1], kv[2])
-
 Base.haskey(d::ImageProperties, k::String) = haskey(properties(d), k)
 Base.keys(d::ImageProperties) = keys(properties(d))
-Base.getkey(d::ImageProperties, key, default) = getkey(properties(d), key, default)
-Base.get!(f::Function, d::ImageProperties, key) = get!(f, properties(d), key)
-
+Base.getkey(d::ImageProperties, key::String, default) = getkey(properties(d), key, default)
+Base.get!(f::Function, d::ImageProperties, key::String) = get!(f, properties(d), key)
 
 # iteration interface
 Base.iterate(d::ImageProperties) = iterate(properties(d))
@@ -140,5 +132,18 @@ Base.iterate(d::ImageProperties, state) = iterate(properties(d), state)
 
 Base.length(d::ImageProperties) = length(properties(d))
 
+Base.get(d::ImageProperties, k::String, v) = get(properties(d), k, v)
+
 Base.filter!(f, d::ImageProperties) = filter!(f, properties(d))
-Base.get(d::ImageProperties, k, v) = get(properties(d), k, v)
+
+Base.pop!(d::ImageProperties, key::String, default) = pop!(properties(d), key, default)
+Base.pop!(d::ImageProperties, key::String) = pop!(properties(d), key, Base.secret_table_token)
+Base.push!(d::ImageProperties, kv::Pair) = insert!(d, kv[1], kv[2])
+Base.push!(d::ImageProperties, kv) = insert!(properties(d), kv[1], kv[2])
+Base.in(item, d::ImageProperties) = in(item, properties(d))
+
+
+
+
+
+
