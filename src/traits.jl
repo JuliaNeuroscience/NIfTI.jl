@@ -1,4 +1,3 @@
-NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}}} where {T,N,A}
 
 const NiftiSliceCodes = Dict{Int,String}(
     0 => "Unkown",
@@ -116,85 +115,7 @@ _sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", sl
 sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
 sliceend(A::AbstractArray) = size(A, ndims(A))
 
-"""
-    qform(img)
-"""
-#=
-qform(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = qform(properties(img))
-qform(s::ImageStream) = qform(properties(s))
-qform(p::ImageProperties) = getheader(p, "qform", qform())
-=#
 
-function qform(s::NiftiFormat)
-    qb, qc, qd, qfac = mat2quat(sform(s))
-    return qform(qformcode(s), qb, qc, qd, qoffsetx(s), qoffsety(s), qoffsetz(s),
-                 ustrip.(pixelspacing(s))..., qfac)
-end
-
-# These are stored in the `properties["header"]["qoffset*"]` fields, so they can be used
-# if desired but are not integrated into spacedirections because it's unlikely that we want
-# to offset every single image axis by a couple of millimeters
-
-qoffsetx(s::NiftiFormat) = getheader(s, "qoffsetx", ustrip(axesoffsets(s, 1)))
-qoffsety(s::NiftiFormat) = getheader(s, "qoffsety", ustrip(axesoffsets(s, 2)))
-qoffsetz(s::NiftiFormat) = getheader(s, "qoffsetz", ustrip(axesoffsets(s, 3)))
-
-
-"""
-    sform(A)
-
-The 4th column of the matrix is the offset of the affine matrix.
-This is primarily included for the purpose of compatibility with DICOM formats, where the
-"Image Position" stores the coordinates of the center of the first voxel
-(see the [DICOM standard](http://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.7.6.2.html#sect_C.7.6.2.1.1) for more details;
-Note, these values should be in interpreted as 'mm').
-"""
-# may just drop sform as property and always grab from spacedirections in future
-sform(img::Union{NiftiFormat,AbstractArray}) =
-    _sform(img, spacedirections(img))
-
-function _sform(img, sd::Tuple{Ax1,Ax2,Ax3}) where {Ax1,Ax2,Ax3}
-    SMatrix{4,4,eltype(Ax1),16}([[sd[1]..., qoffsetx(img)]'
-                                 [sd[2]..., qoffsety(img)]'
-                                 [sd[3]..., qoffsetz(img)]'
-                                 [0.0, 0.0, 0.0, 1.0]'])
-end
-
-function _sform(img, sd::Tuple{Ax1,Ax2}) where {Ax1,Ax2}
-    SMatrix{4,4,eltype(Ax1),16}([[sd[1]..., qoffsetx(img)]'
-                                 [sd[2]..., qoffsety(img)]'
-                                 [0.0, 0.0, 0.0, 0.0]'
-                                 [0.0, 0.0, 0.0, 1.0]'])
-end
-
-"""
-    qformcode(x)
-
-
-Code describing the orientation of the image in the scanner.
-May be any of the following:
-
-* Unkown
-* Scanner_anat
-"""
-qformcode(img::NiftiFormat) = qformcode(properties(img))
-qformcode(p::ImageProperties) = getheader(p, "qformcode", :Unkown)
-qformcode(A::AbstractArray) = :Unkown
-
-"""
-    sformcode(x)
-
-Code describing the orientation of the image.
-May be any of the following:
-
-* Unkown
-* Aligned_anat
-* Talairach
-* MNI152
-"""
-sformcode(img::NiftiFormat) = sformcode(properties(img))
-sformcode(p::ImageProperties) = getheader(p, "sformcode", :Unkown)
-sformcode(A::AbstractArray) = :Unkown
 
 # these are for internal use in writing nifti headers
 
@@ -228,4 +149,5 @@ end
 toffset(s::ImageStream{T,1}) where T = 0
 toffset(s::ImageStream{T,2}) where T = 0
 toffset(s::ImageStream{T,3}) where T = 0
-toffset(s::ImageStream{T,N}) where {T,N} = ustrip(firstindex(axes(s, )))
+toffset(s::ImageStream{T,N}) where {T,N} =
+    ustrip(first(ImageFormats.axisvalues(s)[4]))

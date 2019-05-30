@@ -1,5 +1,6 @@
-"data/MNI152_T1_1mm_nifti2.nii.gz"
 
+
+img = niread("data/MNI152_T1_1mm_nifti2.nii.gz")
 
 @testset "NIfTI Interface" begin
     @test slicecode(img) == "Unkown"
@@ -11,47 +12,41 @@
     @test phasedim(img) == 1
     @test slicedim(img) == 1
 
+    #=
     intent
     intentname
     intentparams
-
-
-    @test sliceintercept(img) = 0.0
-    @test sliceslope(img) = 1.0
+    =#
+    @test scaleintercept(img) == 0.0
+    @test scaleslope(img) == 1.0
 
     @test intentparams(img) == (0.0, 0.0, 0.0)
     @test qformcode(img)  == :MNI152
-    @test qform(img) # TODO
-        @test sform(img) == ((-1.0, 0.0, 0.0    90.0),
-                             ( 0.0, 1.0, 0.0, -126.0),
-                             ( 0.0, 0.0, 1.0,  -72.0))
-                         #TODO add fourth row
+#    @test qform(img) # TODO
+    @test sform(img) ==  [-1.0  0.0  0.0    90.0
+                           0.0  1.0  0.0  -126.0
+                           0.0  0.0  1.0   -72.0
+                           0.0  0.0  0.0    -1.0]
 end
-
 
 @testset "AbstractArray Interface" begin
     @test ndims(img) == 3
     @test size(img) == (182, 218, 182)
     @test length(img) == 7221032
-    @test eltype(img) == Int16
+    @test eltype(img) == Float32
 
-    # TODO
-    # @test img[64, 48, 13, 1] == 496 FIXME
-    #@test img[64, 48, 12, :] == [265, 266]
-    #@test img[69, 56, 13, :] == [502, 521]
+    # TODO need to test actual values in image
 end
 
 
 @testset "ImageFormat Interface" begin
-    @test spatunits(img) == u"mm"
-    @test timeunits(img) == u"s"
-    @test description(img) == "FSL3.3\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-                               \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-                               \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-    @test auxfile(img) == "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+    @test all(spatunits(img) .== u"mm")
+    @test description(img)[1:6] == "FSL3.3"
+
+    @test auxfiles(img) == ["\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"]
     @test data_offset(img) == 544
-    @test calmin(img) = 3000.0
-    @test calmin(img) = 8000.0
+    @test calmin(img) == 3000.0
+    @test calmax(img) == 8000.0
 end
 
 @testset "Images Interface" begin

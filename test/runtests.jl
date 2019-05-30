@@ -5,9 +5,12 @@
 # - test endian values
 # - test intent
 #   - statistics
-using NIfTI, ImageMetadata, GZip
+using NIfTI, ImageMetadata, ImageCore, ImageAxes, GZip, Test, Unitful
 using NIfTI.ImageFormats
-using Test
+import AxisArrays
+
+import NIfTI: slicecode, sliceduration, slicestart, sliceend, frequencydim, phasedim,
+              slicedim, qformcode, qform, sform, scaleslope, scaleintercept, intentparams
 
 function extractto(gzname, out)
     open(out, "w") do io
@@ -27,17 +30,15 @@ end
 end
 
 
-@test_throws ErrorException load(GZIPPED_NII; mmap=true)
-@test_throws ErrorException load(GZIPPED_HDR; mmap=true)
+#@test_throws ErrorException load(GZIPPED_NII; mmap=true)
+#@test_throws ErrorException load(GZIPPED_HDR; mmap=true)
 
 # Test writing
-vol = NiftiImage()
-write(TEMP_FILE, vol)
-read(TEMP_FILE)
+#vol = NiftiImage()
+#write(TEMP_FILE, vol)
+#read(TEMP_FILE)
 
 # Clean up
 rm(NII)
 rm(HDR)
 rm(IMG)
-rm(TEMP_FILE)
-# rm(BE)

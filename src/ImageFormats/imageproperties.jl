@@ -141,9 +141,3 @@ Base.pop!(d::ImageProperties, key::String) = pop!(properties(d), key, Base.secre
 Base.push!(d::ImageProperties, kv::Pair) = insert!(d, kv[1], kv[2])
 Base.push!(d::ImageProperties, kv) = insert!(properties(d), kv[1], kv[2])
 Base.in(item, d::ImageProperties) = in(item, properties(d))
-
-
-
-
-
-

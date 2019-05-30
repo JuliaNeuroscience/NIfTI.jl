@@ -16,10 +16,11 @@ import AxisArrays: axisnames, permutation, AxisArray, axistype
 
 import Base64
 
-
 include("ImageFormats/ImageFormats.jl")
 using .ImageFormats
 using .ImageFormats: @get
+
+NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}}} where {T,N,A}
 
 include("dictionaries.jl")
 include("traits.jl")
@@ -29,6 +30,7 @@ include("intent.jl")
 include("read.jl")
 include("write.jl")
 include("fileio.jl")
+
 
 export niread,
        niwrite,

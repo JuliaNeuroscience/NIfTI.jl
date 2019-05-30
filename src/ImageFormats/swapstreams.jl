@@ -54,7 +54,7 @@ end
 
 SwapStream(io::IO, endianness::UInt32) =
     SwapStream{ENDIAN_BOM != endianness}(io)
-SwapStream(io::IO, needswap::Bool=false) = SwapStream{needswap}(io)
+SwapStream(io::IO; needswap::Bool=false) = SwapStream{needswap}(io)
 
 
 FileIO.stream(s::SwapStream{S,IOType}) where {S,IOType} = s.io::IOType
@@ -79,8 +79,15 @@ read(s::SwapStream{true}, x::Type{<:AbstractArray}) = bswap.(read(stream(s), x))
 read(s::SwapStream{false}, x::Type{<:AbstractArray}) = read(stream(s), x)
 read(s::SwapStream, x::Type{Int8}) = read(stream(s), Int8)
 
-read!(s::SwapStream{false}, a::Array) = read!(stream(s), a)
-read!(s::SwapStream{true}, a::Array) = bswap.(read!(stream(s), a))
+
+read!(s::SwapStream{true,<:IO}, a::Array{Int8,N}) where N = read!(stream(s), a)
+read!(s::SwapStream{false,<:IO}, a::Array{Int8,N}) where N = read!(stream(s), a)
+
+read!(s::SwapStream{true,<:IO}, a::Array{UInt8,N}) where N = read!(stream(s), a)
+read!(s::SwapStream{false,<:IO}, a::Array{UInt8,N}) where N = read!(stream(s), a)
+
+read!(s::SwapStream{false,IOType}, a::Array{T}) where {IOType<:IO,T} = read!(stream(s), a)
+read!(s::SwapStream{true,IOType}, a::Array{T}) where {IOType<:IO,T} = bswap.(read!(stream(s), a))
 
 function read(s::SwapStream{false},
               T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}}

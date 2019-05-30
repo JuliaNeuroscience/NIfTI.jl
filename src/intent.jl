@@ -152,7 +152,8 @@ intentaxis(s::AbstractArray, ::Type{SVector}) = Axis{:vecdim}(range(1, length=s.
 intentaxis(s::AbstractArray, ::Type{GiftiRGB}) = Axis{:colordim}(1:3)
 intentaxis(s::AbstractArray, ::Type{GiftiRGBA}) = Axis{:colordim}(1:4)
 
-function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
+function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer,
+                toffset::F, qx::F, qy::F, qz::F,
                 pixdim::NTuple{N}, p::ImageProperties) where {N,F}
    # determine axisnames
     if p["header"]["sformcode"] != :Unkown
@@ -163,20 +164,12 @@ function niaxes(sz::NTuple{N,Int}, xyzt_units::Integer, toffset::F,
 
     su = get(NiftiUnits, xyzt_units & 0x07, 1)
     axs = Vector{Axis}(undef, min(4,N))
-    axs[1] = Axis{ori[1]}(range(F(1), step=pixdim[1], length=sz[1])*su)
+    axs[1] = Axis{ori[1]}(range(qx, step=pixdim[1], length=sz[1])*su)
     if N > 1
-        if pixdim[3] == 1
-            axs[2] = Axis{ori[2]}(Base.OneTo(sz[2])*su)
-        else
-            axs[2] = Axis{ori[2]}(range(F(1), step=pixdim[2], length=sz[2])*su)
-        end
+        axs[2] = Axis{ori[2]}(range(qy, step=pixdim[2], length=sz[2])*su)
     end
     if N > 2
-        if pixdim[3] == 1
-            axs[3] = Axis{ori[3]}(Base.OneTo(sz[3])*su)
-        else
-            axs[3] = Axis{ori[3]}(range(F(1), step=pixdim[3], length=sz[3])*su)
-        end
+        axs[3] = Axis{ori[3]}(range(qz, step=pixdim[3], length=sz[3])*su)
     end
     if N > 3
         tu = get(NiftiUnits, xyzt_units & 0x38, 1)
