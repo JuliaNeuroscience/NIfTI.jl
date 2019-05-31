@@ -1,16 +1,12 @@
 language: julia
 os:
-  - linux
-  - osx
+    - osx
+    - linux
 julia:
-  - 0.7
-  - 1.0
-  - nightly
+    - 0.7
+    - 1.1
+    - nightly
 notifications:
-  email: false
-script:
- - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
- - julia --color=yes -e 'using InteractiveUtils; versioninfo(); import Pkg; Pkg.clone(pwd()); Pkg.build("NIfTI")'
-   # disable for now - julia --color=yes -e 'import Pkg; Pkg.test("NIfTI")'
+    email: false
 after_success:
-  - julia -e 'cd(Pkg.dir("NIfTI")); Pkg.add("Coverage"); Pkg.checkout("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+- julia -e 'cd(Pkg.dir("NIfTI")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
