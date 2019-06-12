@@ -5,7 +5,7 @@
 # - test endian values
 # - test intent
 #   - statistics
-using NIfTI, ImageMetadata, ImageCore, ImageAxes, GZip, Test, Unitful
+using FileIO, NIfTI, ImageMetadata, ImageCore, ImageAxes, GZip, Test, Unitful
 using NIfTI.ImageFormats
 import AxisArrays
 
@@ -19,6 +19,29 @@ function extractto(gzname, out)
         end
     end
 end
+
+const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")
+const NII = "$(tempname()).nii"
+extractto(GZIPPED_NII, NII)
+
+const TEMPNII_FILE = "$(tempname()).nii"
+
+# dual file storage
+const GZIPPED_HDR = joinpath(dirname(@__FILE__), "data/example4d.hdr.gz")
+hdr_stem = tempname()
+const HDR = "$hdr_stem.hdr"
+const IMG = "$hdr_stem.img"
+extractto(GZIPPED_HDR, HDR)
+extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
+
+
+#
+if FileIO.unknown((query(NII)))
+    add_format(format"NII", (), [".nii", ".img"], [:NIfTI])
+    #add_format(format"ANZ", detectnii, [".hdr"], [:NIfTI])
+end
+
+
 
 @testset "NIfTI-1" begin
     include("nii1.jl")

@@ -1,6 +1,6 @@
 module ImageFormats
 
-using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays
+using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays, Mmap
 using Unitful: unit, ustrip
 using GeometryTypes: Point
 using LinearAlgebra
@@ -35,7 +35,7 @@ export ImageFormat,
 
 include("swapstreams.jl")
 include("imageproperties.jl")
-include("iometa.jl")
+include("imageinfo.jl")
 include("imagestream.jl")
 include("traits.jl")
 include("orientation.jl")

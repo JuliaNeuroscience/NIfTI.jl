@@ -3,19 +3,28 @@
 # (although a lot of software seems to just skip this)
 
 
-function niwrite(f::String, A::AbstractArray; version::Int=1, copyprops::Bool=false)
-    open(f, "w") do io
-        atransformed = nieltransform(A)
-        s = ImageStream(io, atransformed; copyprops=copyprops)
-
-        if version == 1
-            writehdr1(s)
-        else
-            writehdr2(s)
-        end
-        write(s, extension(s))
-        write(s, atransformed)  # ends on 1180064
+function save(f::File{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    open(f, "w") do s
+        save(s, A, version=version, copyprops)
     end
+end
+
+function save(s::Stream{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    if isgz(filename(s))
+        niwrite(gzdopen(stream(s)), nieltransform(A), version=version, copyprops=copyprops)
+    else
+        niwrite(stream(s), nieltransform(A), version=version, copyprops=copyprops)
+    end
+end
+
+function niwrite(s::ImageStream, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    if version == 1
+        writehdr1(s)
+    else
+        writehdr2(s)
+    end
+    write(s, extension(s))
+    write(s, A)
     return nothing
 end
 

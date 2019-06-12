@@ -11,23 +11,9 @@ end
 =#
 
 # single file storage
-const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")
-const NII = "$(tempname()).nii"
-extractto(GZIPPED_NII, NII)
 
-const TEMPNII_FILE = "$(tempname()).nii"
-
-# dual file storage
-const GZIPPED_HDR = joinpath(dirname(@__FILE__), "data/example4d.hdr.gz")
-hdr_stem = tempname()
-const HDR = "$hdr_stem.hdr"
-const IMG = "$hdr_stem.img"
-extractto(GZIPPED_HDR, HDR)
-extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
-
-
-for file_name in (NII, GZIPPED_NII, HDR, GZIPPED_HDR)
-    img = niread(file_name)
+for (file_name, m) in ((NII, true), (GZIPPED_NII, false), (HDR, true), (GZIPPED_HDR, false))
+    img = load(File(format"NII", file_name), mmap=m)
 
     @testset "NIfTI Interface" begin
         @test slicecode(img) == "Unkown"
@@ -49,7 +35,8 @@ for file_name in (NII, GZIPPED_NII, HDR, GZIPPED_HDR)
         @test qformcode(img)  == :Scanner_anat
         # TODO Something is messed up with these values
         # The NIfTI format tries to normalize the qform to orientation. Therefore, it's not
-        # always (rarely) used by other libraries, but we need it for when we 
+        # always (rarely) used by other libraries, but we need it for when we interact with
+        # DICOMs or some versions of FSL (I think).
         #NIfTI.orientation(qform(img)) == AxisArrays.axisnames(img)[1:3]
 
         @test sform(img) ≈ [ -2.0                    6.714715653593746e-19  9.081024511081715e-18  117.8551025390625
@@ -100,11 +87,12 @@ for file_name in (NII, GZIPPED_NII, HDR, GZIPPED_HDR)
         @test size_spatial(img) == (128, 96, 24)
         @test spatialorder(img) == (:R2L, :P2A, :I2S)
     end
-
-    #if file_name == NII
-    #    niwrite(TEMPNII_FILE, img)
-    #end
 end
+
+if file_name == NII
+    save(EMPNII_FILE, img)
+end
+
 
 # big endian with orientation
 ALR = joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz")
@@ -119,5 +107,8 @@ img = niread(ALR);
 img = niread(ARL);
 @test size(img) == (91,109,91)
 @test spatialorder(img) == (:L2R, :P2A, :I2S)
+
+# TODO Test memory mapping
+img = niread(ARL, mmap=true)
 
 #img2 = permutedims(img, (2,1,3,4))

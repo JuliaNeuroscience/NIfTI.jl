@@ -8,6 +8,10 @@ function isgz(io::IO)
     ret
 end
 
+function isgz(f::AbstractString)
+    split(f, '.')[end] == "gz"
+end
+
 function getimg(f::AbstractString)
     img_file = replace(f, ".hdr" => ".img")
     if isfile(img_file)
@@ -26,19 +30,28 @@ function gethdr(f::AbstractString)
     end
 end
 
-niread(f::String, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mode="r", mmap::Bool=false) = open(f, mode) do io
-    read(nistreaming(io, f), sink; mmap=mmap)
+function load(f::File{DataFormat{:NII}}, sink::Type{<:AbstractArray}=MetaAxisArray;
+              mode::String="r", mmap::Bool=false, grow::Bool=true)
+    open(f, mode) do s
+        load(s, sink, mmap=mmap, grow=grow)
+    end
 end
 
-function niread(io::IO, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mode="r", mmap::Bool=false)
-    read(nistreaming(io, ), sink; mmap=mmap)
+function load(s::Stream{DataFormat{:NII}}, sink::Type{<:AbstractArray}=MetaAxisArray;
+              mmap::Bool=false, grow::Bool=true)
+    read(_metadata(stream(s), filename(s)), sink, mmap=mmap, grow=grow)
 end
 
-nistreaming(f::String; mode::String="r") = open(f, mode) do io
-    nistreaming(io, f)
+function metadata(s::File{DataFormat{:NII}})
+    open(f) do s
+        ret = metadata(s)
+    end
+    return ret
 end
 
-function nistreaming(io::IO, f::String)
+metadata(s::Stream{DataFormat{:NII}}) =  getinfo(_metadata(stream(s), filename(s)))
+
+function _metadata(io::IO, f::String)
     if isgz(io)
         gzs = gzdopen(io)
         s = readhdr(gzs)

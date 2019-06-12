@@ -29,23 +29,11 @@ include("extension.jl")
 include("intent.jl")
 include("read.jl")
 include("write.jl")
-include("fileio.jl")
+#include("fileio.jl")
 
-
-export niread,
-       niwrite,
-       phasedim,
-       frequencydim,
-       slicedim,
-       slicecode,
-       sliceduration,
-       sliceend,
-       qform,
-       sform,
-       # ImageFormats
-       ImageFormat,
+export ImageFormat,
        ImageProperties,
-       IOMeta,
+       ImageInfo,
        ImageStream,
        # properties
        timeunits,

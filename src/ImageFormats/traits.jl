@@ -53,9 +53,7 @@ header(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = header(propertie
 header(a::AbstractArray{T}) where T = nothing
 
 
-"""
-    popheader!(p, key, default)
-"""
+"popheader!(p, key, default)"
 popheader!(p::ImageProperties, key::String, default) = pop!(header(d), key, default)
 popheader!(img::ImageMeta{T,N,A,<:ImageProperties}, key::String, default) where {T,N,A} =
     popheader!(properties(img), key, default)
@@ -140,12 +138,13 @@ function forward_properties(::Type{A}) where A
 
         calmin(d::$A) = calmin(properties(d))
         calmin!(d::$A, val) = calmin!(properties(d), val)
-
     end
 end
 
-forward_properties(IOMeta)
+#forward_properties(IOMeta)
 forward_properties(ImageStream)
+forward_properties(ImageInfo)
+
 
 """
     spataxes(img)
