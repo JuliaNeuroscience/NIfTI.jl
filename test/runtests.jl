@@ -41,8 +41,6 @@ if FileIO.unknown((query(NII)))
     #add_format(format"ANZ", detectnii, [".hdr"], [:NIfTI])
 end
 
-
-
 @testset "NIfTI-1" begin
     include("nii1.jl")
 end

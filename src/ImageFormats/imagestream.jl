@@ -1,27 +1,25 @@
 mutable struct ImageStream{T,N,Ax,P,IOType}
     io::IOType
     info::ImageInfo{T,N,Ax,P}
-end
 
-#ImageStream{T}(io::IOMeta{IOType}, indices::Ax) where {T,Ax,IOType} =
-#    ImageStream{T,length(indices),Ax,IOType}(stream(io), indices, properties(io))
+    function ImageStream(io::IOType, info::ImageInfo{T,N,Ax,P}) where {T,N,Ax,P,IOType}
+        new{T,N,Ax,P,IOType}(io, info)
+    end
+end
 
 function ImageStream{T}(io::IOType, indices::Ax, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,Ax,IOType<:IO}
     ImageStream(io, ImageInfo{T}(indices, ImageProperties(properties; copyprops=copyprops)))
 end
 
 function ImageStream(io::IOType, A::AbstractArray{T,N}; copyprops::Bool=false) where {T,N,IOType}
-    ImageStream(io, ImageInfo{T,N}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
+    ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
 end
 
 function ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
     open(f, mode) do io
-        ImageStream(io, ImageStream{T,N}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
+        ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
     end
 end
-ImageStream{T,N,Ax,IOType}(io::IOType, indices::Ax, props::ImageProperties{F}) where {T,N,Ax,IOType,F} =
-    ImageStream{T,N,Ax,IOType,F}(io, indices, props)
-
 getinfo(img::ImageStream) = img.info
 
 # array like interface
@@ -100,7 +98,6 @@ function read(s::ImageStream{T,N}, sink::Type{A}; mmap::Bool=false) where {T,N,A
         seek(s, data_offset(s))
         SA(Mmap.mmap(s, Array{T,N}, size(s)))
     else
-        seek(s, data_offset(s))
         read(stream(s), SA)
     end
 end

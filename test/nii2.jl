@@ -1,6 +1,6 @@
 
 
-img = niread("data/MNI152_T1_1mm_nifti2.nii.gz")
+img = load(File(format"NII", "data/MNI152_T1_1mm_nifti2.nii.gz"))
 
 @testset "NIfTI Interface" begin
     @test slicecode(img) == "Unkown"

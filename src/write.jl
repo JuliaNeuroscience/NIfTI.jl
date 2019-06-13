@@ -5,7 +5,7 @@
 
 function save(f::File{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
     open(f, "w") do s
-        save(s, A, version=version, copyprops)
+        save(s, A, version=version, copyprops=copyprops)
     end
 end
 
@@ -17,7 +17,8 @@ function save(s::Stream{DataFormat{:NII}}, A::AbstractArray; version::Int=1, cop
     end
 end
 
-function niwrite(s::ImageStream, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+function niwrite(io::IO, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    s = ImageStream(io, A)
     if version == 1
         writehdr1(s)
     else
@@ -50,12 +51,12 @@ function writehdr1(s::ImageStream{T}) where T
     write(s, Int16(NiftiIntentsReverse[intent(s)]))           # 68 - intent_code::Int16
     write(s, Int16(NiftiDatatypesReverse[T]))                 # 70 - datatype::Int16
     write(s, Int16(sizeof(T)*8))                              # 72 - bitpix::Int16
-    write(s, Int16(slicestart(s))) - 1                        # 74 - slice_start::Int16 - NOTE: go to zero based indexing
+    write(s, Int16(slicestart(s) - 1))                        # 74 - slice_start::Int16 - NOTE: go to zero based indexing
     write(s, convert(Vector{Float32}, pixdim(s, qfac)))       # 76 - pixdim::NTuple{8,Float32}
     write(s, Float32(voxoffset(s, Val(1))))                   # 108 - vox_offset::Float32
     write(s, Float32(scaleslope(s)))                          # 112 - scl_slope::Float32
     write(s, Float32(scaleintercept(s)))                      # 116 - scl_inter::Float32
-    write(s, Int16(sliceend(s))) - 1                          # 120 - slice_end::Int16 - NOTE: go to zero based indexing
+    write(s, Int16(sliceend(s) - 1))                          # 120 - slice_end::Int16 - NOTE: go to zero based indexing
     write(s, Int8(NiftiSliceCodesReverse[slicecode(s)]))      # 122 - slice_code::Int8
     write(s, Int8(xyztunits(s)))                              # 123 - xyzt_units::Int8
     write(s, Float32(calmax(s)))                              # 124 - cal_max::Float32
@@ -115,8 +116,8 @@ function writehdr2(s::ImageStream{T}) where T
     write(s, Float64(calmin(s)))                         # 200 - cal_min::Float64
     write(s, Float64(sliceduration(s)))                  # 208 - slice_duration::Float64
     write(s, Float64(toffset(s)))                        # 216 - toffset::Float64
-    write(s, Int64(slicestart(s))) - 1                   # 224 - slice_start::Int64 - NOTE: go to zero based indexing
-    write(s, Int64(sliceend(s))) - 1                     # 232 - slice_end::Int64
+    write(s, Int64(slicestart(s) - 1))                   # 224 - slice_start::Int64 - NOTE: go to zero based indexing
+    write(s, Int64(sliceend(s) - 1))                     # 232 - slice_end::Int64
     descrip = description(s)                             # 240 - descrip::NTuple{80,UInt8}
     if length(descrip) > 80
         write(s, codeunits(descrip[1:80]))

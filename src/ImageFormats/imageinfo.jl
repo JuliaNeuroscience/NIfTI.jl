@@ -85,8 +85,8 @@ ImageCore.pixelspacing(img::ImageInfo) =
 
 getimageinfo(x::AbstractArray) = nothing
 
-AxisArrays.axistype(s::ImageInfo, i::Int) = eltype(axes(s, i))
-AxisArrays.axisvalues(img::ImageInfo) = axisvalues(axes(s)...)
+AxisArrays.axistype(img::ImageInfo, i::Int) = eltype(axes(img, i))
+AxisArrays.axisvalues(img::ImageInfo) = axisvalues(axes(img)...)
 
 axesoffsets(img::Union{AbstractArray,ImageInfo}) = map(i -> _firstindex(i) - 1, axes(img))
 axesoffsets(img::Union{AbstractArray,ImageInfo}, i::Int) = _firstindex(axes(img, i)) - 1
@@ -127,7 +127,7 @@ function inherit_imageinfo(::Type{T}) where T
 
         Base.length(x::$T) = length(getinfo(x))
 
-        ImageAxes.timeaxis(x::$T) = timeaxis(properties(x))
+        ImageAxes.timeaxis(x::$T) = timeaxis(getinfo(x))
         ImageAxes.nimages(x::$T) = timeaxis(getinfo(x))
         ImageAxes.colordim(x::$T) = colordim(getinfo(x))
         ImageAxes.assert_timedim_last(x::$T) = assert_timedim_last(getinfo(x))
