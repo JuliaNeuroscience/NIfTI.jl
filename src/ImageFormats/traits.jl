@@ -153,7 +153,7 @@ Returns the axis associated with each spatial dimension. This differs from `indi
 in that it returns the AxisArrays related axes instead of the axes of the parent array.
 """
 spataxes(img::AbstractArray) = ImageAxes.filter_space_axes(AxisArrays.axes(img), AxisArrays.axes(img))
-spataxes(s::ImageStream) = map(i->axes(s, i), coords_spatial(s))
+spataxes(s::Union{ImageStream,ImageInfo}) = map(i->axes(s, i), coords_spatial(s))
 
 """
     spatunits(img)
@@ -161,7 +161,7 @@ spataxes(s::ImageStream) = map(i->axes(s, i), coords_spatial(s))
 Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If not
 available `nothing` is returned for each spatial axis.
 """
-spatunits(a::Union{AbstractArray,ImageStream}) =
+spatunits(a::Union{AbstractArray,ImageStream,ImageInfo}) =
     map(i->unit(i[1]), spataxes(a))  # TODO: handle non unitful
 
 """
@@ -170,7 +170,7 @@ spatunits(a::Union{AbstractArray,ImageStream}) =
 Returns the units (i.e. Unitful.unit) the time axis is measured in. If not available
 `nothing` is returned.
 """
-function timeunits(a::Union{AbstractArray,ImageStream})
+function timeunits(a::Union{AbstractArray,ImageStream,ImageInfo})
     ta = timeaxis(a)
     if ta == nothing
         return nothing

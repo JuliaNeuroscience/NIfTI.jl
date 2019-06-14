@@ -20,7 +20,7 @@ include("ImageFormats/ImageFormats.jl")
 using .ImageFormats
 using .ImageFormats: @get
 
-NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}}} where {T,N,A}
+NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}},ImageInfo} where {T,N,A}
 
 include("dictionaries.jl")
 include("traits.jl")
@@ -31,7 +31,7 @@ include("read.jl")
 include("write.jl")
 #include("fileio.jl")
 
-export ImageFormat,
+export ImageFormats,
        ImageProperties,
        ImageInfo,
        ImageStream,

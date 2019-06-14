@@ -1,6 +1,6 @@
 module ImageFormats
 
-using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays, Mmap
+using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays, Mmap, GZip
 using Unitful: unit, ustrip
 using GeometryTypes: Point
 using LinearAlgebra
@@ -13,9 +13,8 @@ import AxisArrays
 import AxisArrays: AxisArray, Axis, axisnames, axisvalues, axisnames
 import Base: read, read!, write
 
-export ImageFormat,
-       ImageProperties,
-       IOMeta,
+export ImageProperties,
+       ImageInfo,
        ImageStream,
        SwapStream,
        # properties

@@ -37,6 +37,7 @@ scaleintercept(A::AbstractArray) = 0.0
 
 # dimension info for nifti header
 diminfo(img::NiftiFormat) = diminfo(properties(img))
+diminfo(img::ImageInfo) = diminfo(properties(img))
 diminfo(A::AbstractArray) = Int8(0)
 diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
 
@@ -110,7 +111,7 @@ Which slice corresponds to the last slice acquired during MRI acquisition
 (i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
 """
 sliceend(img::NiftiFormat) = _sliceend(properties(img), size(img, slicedim(img)))
-
+sliceend(img::ImageInfo) = _sliceend(properties(img), size(img, slicedim(img)))
 _sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", slice_dim_size)
 sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
 sliceend(A::AbstractArray) = size(A, ndims(A))

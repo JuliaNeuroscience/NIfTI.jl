@@ -2,7 +2,7 @@ mutable struct ImageStream{T,N,Ax,P,IOType}
     io::IOType
     info::ImageInfo{T,N,Ax,P}
 
-    function ImageStream(io::IOType, info::ImageInfo{T,N,Ax,P}) where {T,N,Ax,P,IOType}
+    function ImageStream(io::IOType, info::ImageInfo{T,N,Ax,P}) where {T,N,Ax,P,IOType<:IO}
         new{T,N,Ax,P,IOType}(io, info)
     end
 end
@@ -15,25 +15,21 @@ function ImageStream(io::IOType, A::AbstractArray{T,N}; copyprops::Bool=false) w
     ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
 end
 
-function ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="w+", copyprops::Bool=false) where {T,N}
-    open(f, mode) do io
-        ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
-    end
-end
+ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="r", copyprops::Bool=false) where {T,N} =
+    ImageStream(query(f), ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
+
+ImageStream(f::AbstractString, info::ImageInfo) = ImageStream(query(f), info)
+
+
 getinfo(img::ImageStream) = img.info
 
 # array like interface
 Base.ndims(s::ImageStream{T,N}) where {T,N} = N
 Base.eltype(s::ImageStream{T,N}) where {T,N} = T
 
-#AxisArrays.axisnames(s::ImageStream{T,N,I}) where {T,N,I} = axisnames(I)
-#AxisArrays.axisnames(s::ImageStream{T,N,I}, i::Int) where {T,N,I} = axisnames(I)[i]
-#AxisArrays.axisvalues(s::ImageStream) = axisvalues(axes(s)...)
-
 getheader(s::ImageStream, k::String, default) = getheader(properties(s), k, default)
 
 inherit_imageinfo(ImageStream)
-
 #=
 TimeAxis,
 HasTimeAxis,
@@ -114,7 +110,7 @@ const AxisDArray{T,N,Ax} = AxisArray{T,N,<:Array,Ax}
 const ImageDAxes{T,N,Ax} = ImageMeta{T,N,<:AxisDArray{T,N,Ax}}
 const ImageSAxes{T,N,Ax} = ImageMeta{T,N,<:AxisSArray{T,N,Ax}}
 
-read(s::ImageStream; kwarg...) = read(s, ImageDAxes; kwargs...)
+read(s::ImageStream; kwargs...) = read(s, ImageDAxes; kwargs...)
 
 write(s::ImageStream, img::ImageMeta) = write(s, img.data)
 write(s::ImageStream, a::AxisArray) = write(s, a.data)

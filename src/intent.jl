@@ -111,7 +111,7 @@ intent(A::AbstractVector{<:RGBA}) = GiftiRGBA
 """
     intentname(img)
 """
-intentname(img::ImageFormat{format"NII"}) = img["header"]["intentname"]
+#intentname(img::ImageFormat{format"NII"}) = img["header"]["intentname"]
 
 
 intentname(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentname(properties(img))
@@ -128,7 +128,7 @@ intentname() = String(fill(UInt8(0), 16))
 """
     intentparams(img)
 """
-intentparams(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intentparams(properties(img))
+intentparams(img::NiftiFormat) where {T,N,A} = intentparams(properties(img))
 intentparams(s::ImageStream) = intentparams(properties(s))
 intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
 

@@ -1,39 +1,43 @@
-# TODO:
+#TODO:
 # Should probably update the qform stuff too
 # (although a lot of software seems to just skip this)
 
 
-function save(f::File{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
-    open(f, "w") do s
-        save(s, A, version=version, copyprops=copyprops)
-    end
+function save(f::Formatted{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
+    anew = nieltransform(A)
+    write(savestreaming(f, anew; version=version, copyprops=copyprops), anew)
+    return nothing
 end
 
-function save(s::Stream{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
-    if isgz(filename(s))
-        niwrite(gzdopen(stream(s)), nieltransform(A), version=version, copyprops=copyprops)
+savestreaming(s::File{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false) =
+    savestreaming(open(s, "w"), A, version=version, copyprops=copyprops)
+
+savestreaming(s::Stream{DataFormat{:NII},GZip.GZipStream}, A::AbstractArray; version::Int=1, copyprops::Bool=false) =
+    savemeta(ImageStream(stream(s), ImageInfo(A, copyprops=copyprops)), version=version)
+
+function savestreaming(s::Stream{DataFormat{:NII},IOType}, A::AbstractArray; version::Int=1, copyprops::Bool=false) where IOType
+    if file_extension(s) == ".gz"
+        return savestreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)), A, version=version, copyprops=copyprops)
     else
-        niwrite(stream(s), nieltransform(A), version=version, copyprops=copyprops)
+        return savemeta(ImageStream(stream(s), ImageInfo(A, copyprops=copyprops)), version=version)
     end
 end
 
-function niwrite(io::IO, A::AbstractArray; version::Int=1, copyprops::Bool=false)
-    s = ImageStream(io, A)
+function savemeta(s::ImageStream; version::Int=1)
     if version == 1
         writehdr1(s)
     else
         writehdr2(s)
     end
     write(s, extension(s))
-    write(s, A)
-    return nothing
+    return s
 end
 
+# TODO: this will need to support all the crazy CIFTI formats in the future
 nieltransform(A::AbstractArray{<:BitTypes}) = A
 function nieltransform(A::AbstractArray{T}) where T
     error("NIfTI.jl current doesn't support writing arrays of eltype $T.")
 end
-
 
 function writehdr1(s::ImageStream{T}) where T
                                                               # offset - C name :: Type

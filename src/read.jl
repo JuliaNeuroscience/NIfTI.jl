@@ -1,17 +1,6 @@
 const MetaAxisArray{T,N} = ImageMeta{T,N,AxisArray{T,N,Array{T,N}}}
 const MetaArray{T,N} = ImageMeta{T,N,Array{T,N}}
 
-function isgz(io::IO)
-    gzbits = read(io, 2)
-    ret = gzbits == [0x1F,0x8B]
-    seek(io, 0)
-    ret
-end
-
-function isgz(f::AbstractString)
-    split(f, '.')[end] == "gz"
-end
-
 function getimg(f::AbstractString)
     img_file = replace(f, ".hdr" => ".img")
     if isfile(img_file)
@@ -30,48 +19,57 @@ function gethdr(f::AbstractString)
     end
 end
 
+function load(f::Formatted{format"NII"}, sink=MetaAxisArray;
+              mode::String="r", mmap::Bool=false, grow::Bool=true)
+        read(loadstreaming(f, mode=mode), sink; mmap=mmap, grow=grow)
+end
+
+#=
 function load(f::File{DataFormat{:NII}}, sink::Type{<:AbstractArray}=MetaAxisArray;
               mode::String="r", mmap::Bool=false, grow::Bool=true)
+    loadstreaming() do s
     open(f, mode) do s
         load(s, sink, mmap=mmap, grow=grow)
     end
 end
-
-function load(s::Stream{DataFormat{:NII}}, sink::Type{<:AbstractArray}=MetaAxisArray;
-              mmap::Bool=false, grow::Bool=true)
-    read(_metadata(stream(s), filename(s)), sink, mmap=mmap, grow=grow)
+=#
+function loadstreaming(s::File{DataFormat{:NII}}; mode::String="r")
+    loadstreaming(open(s, mode))
 end
 
-function metadata(s::File{DataFormat{:NII}})
-    open(f) do s
-        ret = metadata(s)
+function loadstreaming(s::Stream{DataFormat{:NII},GZip.GZipStream})
+    m = loadmeta(s)
+    if nitype(m) == "NIfTI-1Double" || nitype(m) == "NIfTI-2Double"
+        ret = ImageStream(gzdopen(open(getimg(filename(s)))), m)
+        close(s)
+    else
+        ret = ImageStream(stream(s), m)
     end
     return ret
 end
 
-metadata(s::Stream{DataFormat{:NII}}) =  getinfo(_metadata(stream(s), filename(s)))
-
-function _metadata(io::IO, f::String)
-    if isgz(io)
-        gzs = gzdopen(io)
-        s = readhdr(gzs)
-        s["filename"] = f
-        if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
-            close(s.io)
-            s.io = gzdopen(open(getimg(s["filename"])))
-        end
+function loadstreaming(s::Stream{DataFormat{:NII},IOType}) where IOType
+    if file_extension(s) == ".gz"
+        return loadstreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
     else
-        s = readhdr(io)
-        s["filename"] = f
-        if nitype(s) == "NIfTI-1Double" || nitype(s) == "NIfTI-2Double"
-            close(s.io)
-            s.io = open(getimg(s["filename"]))
+        m = loadmeta(s)
+        if nitype(m) == "NIfTI-1Double" || nitype(m) == "NIfTI-2Double"
+            close(s)
+            return ImageStream(open(getimg(filename(s))), m)
+        else
+            return ImageStream(stream(s), m)
         end
     end
-    return s
 end
 
-function nitype(s::ImageStream)
+function metadata(s::File{DataFormat{:NII}})
+    open(s) do s
+        metadata(s)
+    end
+end
+
+
+function nitype(s::ImageInfo)
     if s["header"]["magic"] == NP1_MAGIC
         return "NIfTI-1Single"
     elseif s["header"]["magic"] == NI1_MAGIC
@@ -85,7 +83,23 @@ function nitype(s::ImageStream)
     end
 end
 
-function readhdr(io::IO)
+function metadata(s::Stream{DataFormat{:NII},IOType}) where IOType
+    if file_extension(s) == ".gz"
+        return loadmeta(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
+    else
+        return loadmeta(s)
+    end
+end
+
+metadata(s::Stream{DataFormat{:NII},GZip.GZipStream}) = loadmeta(s)
+
+function loadmeta(s::Stream{DataFormat{:NII}})
+    m = loadmeta(stream(s))
+    m["filename"] = filename(s)
+    return m
+end
+
+function loadmeta(io::IO)
     ret = read(io, Int32)
     if ret == Int32(348)
         readhdr1(io, ImageProperties{format"NII"}())
@@ -168,7 +182,7 @@ function readhdr1(s::IO, p::ImageProperties)
 
     p["header"]["extension"] = read(s, p, NiftiExtension)
 
-    return ImageStream{T}(s, niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
+    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
 end
 
 function readhdr2(s::IO, p::ImageProperties)
@@ -232,5 +246,5 @@ function readhdr2(s::IO, p::ImageProperties)
     end
     p["header"]["extension"] = read(s, p, NiftiExtension)
 
-    return ImageStream{T}(s, niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
+    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
 end

@@ -66,6 +66,8 @@ ImageCore.spacedirections(s::ImageInfo) = @get s "spacedirections" ImageCore._sp
 
 #Base.names(img::ImageInfo{T,N,L}) where {T,N,L} = L
 #Base.names(img::ImageInfo{T,N,L}, i::Int) where {T,N,L} = L[i]
+#AxisArrays.axisvalues(s::ImageStream) = axisvalues(axes(s)...)
+
 
 
 # ImageCore interface
@@ -85,6 +87,8 @@ ImageCore.pixelspacing(img::ImageInfo) =
 
 getimageinfo(x::AbstractArray) = nothing
 
+AxisArrays.axisnames(s::ImageInfo{T,N,Ax}) where {T,N,Ax} = axisnames(Ax)
+AxisArrays.axisnames(s::ImageInfo{T,N,Ax}, i::Int) where {T,N,Ax} = axisnames(Ax)[i]
 AxisArrays.axistype(img::ImageInfo, i::Int) = eltype(axes(img, i))
 AxisArrays.axisvalues(img::ImageInfo) = axisvalues(axes(img)...)
 
@@ -110,7 +114,8 @@ function inherit_imageinfo(::Type{T}) where T
         ImageMetadata.copyproperties(x::$T) = copyproperties(getinfo(x))
 
 
-
+        AxisArrays.axisnames(x::$T) = axisnames(getinfo(x))
+        AxisArrays.axisnames(x::$T, i::Int) = axisnames(getinfo(x), i)
         AxisArrays.axisvalues(x::$T) = axisvalues(getinfo(x))
         AxisArrays.axistype(x::$T) = axistype(getinfo(x))
         AxisArrays.axistype(x::$T, i::Int) = AxisArrays.axistype(getinfo(x), i)
@@ -136,10 +141,7 @@ function inherit_imageinfo(::Type{T}) where T
     return nothing
 end
 
-
-HasAxes(x::T) where T = false
-
-HasAxes(x::Tuple{Vararg{<:Axis,N}}) where N = true
+#=
 
 axes_first(x::Tuple{Vararg{<:Axis,N}}) where N = map(i->first(i.val), x)
 
@@ -148,7 +150,6 @@ function axes_first(x)
     axes_first(getaxes(x))
 end
 
-#=
 struct AxesStruct{Ax}
     axes::Ax
 end

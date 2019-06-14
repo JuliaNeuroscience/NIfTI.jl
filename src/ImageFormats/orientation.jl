@@ -67,11 +67,11 @@ function isneuroview(axnames::String)
     axnames == "right-anterior-superior" | axnames == "right-anterior-superior-time"
 end
 
-getaffine(img::Union{AbstractArray,ImageStream}) =
+getaffine(img::Union{AbstractArray,ImageStream,ImageInfo}) =
     AffineMap(getlinear(img), gettranslation(img))
 
 # linear component of AffineMap
-getlinear(img::Union{AbstractArray,ImageStream}) =
+getlinear(img::Union{AbstractArray,ImageStream,ImageInfo}) =
     _getlinear(spacedirections(img))
 
 function _getlinear(sd::NTuple{2,NTuple{2,T}}) where T
@@ -86,11 +86,11 @@ function _getlinear(sd::NTuple{3,NTuple{3,T}}) where T
 end
 
 # translation component of AffineMap
-gettranslation(img::Union{AbstractArray,ImageStream}) =
+gettranslation(img::Union{AbstractArray,ImageStream,ImageInfo}) =
     SVector(ustrip.(first.(axisvalues(img)[1:sdims(img)])))
 
 # quaternion of spacedirections
-getquat(img::Union{AbstractArray,ImageStream}) = _getquat(getlinear(img))
+getquat(img::Union{AbstractArray,ImageStream,ImageInfo}) = _getquat(getlinear(img))
 
 function _getquat(sd::SMatrix{2,2,T}) where T<:AbstractFloat
     _getquat(SMatrix{3,3,T}(sd[1:2, 1]..., zero(T),
@@ -102,7 +102,7 @@ _getquat(sd::StaticMatrix{3,3,T}) where T<:AbstractFloat = Quat(sd)
 
 _getquat(sd::NTuple{N,NTuple{N,T}}) where {N,T} = _getquat(map(i->float.(i), sd))
 
-getaffinemat(img::Union{AbstractArray,ImageStream}) =
+getaffinemat(img::Union{AbstractArray,ImageStream,ImageInfo}) =
     _getaffinemat(getlinear(img), gettranslation(img))
 
 
