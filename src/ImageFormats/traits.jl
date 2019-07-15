@@ -1,40 +1,101 @@
-"""auxfiles(p) - Retrieves string for auxiliary file associated with the image."""
+"""
+    hasproperties(img) -> Bool
 
-auxfiles(p::ImageProperties) = @get p "auxfiles" [""]
-auxfiles(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = auxfiles(properties(img))
-auxfiles(A::AbstractArray) = [""]
+Returns true if `img` has a `properties` method.
+"""
+hasproperties(x::T) where T = hasproperties(T)
+hasproperties(::Type{T}) where T = false
+hasproperties(::Type{<:ImageMeta}) = true
+hasproperties(::Type{<:ImageStream}) = true
+hasproperties(::Type{<:ImageInfo}) = true
+
+function noprops_error(::T) where T
+    error("Type $T does not appear to have a `properties` method defined.
+           Ensure that `hasproperties` and `properties` are defined for this Type.")
+end
 
 """
-    data_offset(p)
+    auxfiles(img) -> Vector{String}
+
+Retrieves string for auxiliary file associated with the image.
+"""
+
+function auxfiles(p::ImageProperties)::Vector{String}
+    out = get(p, "auxfiles", nothing)
+    if isnothing(out)
+        [""]
+    else
+        out
+    end
+end
+function auxfiles(x::T) where T
+    if hasproperties(x)
+        auxfiles(properties(x))
+    else
+        [""]
+    end
+end
+
+"""
+    data_offset(img)
 
 Returns offset to data given an image derived from a certain filetype. This is intended for
 use by those developing and manipulating image IO.
 """
 data_offset(p::ImageProperties) = get(p, "data_offset", 0)::Int
-data_offset(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = data_offset(properties(img))::Int
-data_offset(A::AbstractArray) = 0
+function data_offset(x::T) where T
+    if hasproperties(x)
+        data_offset(properties(x))
+    else
+        0
+    end
+end
 
-"data_offset!(p, n) - Change data_offset defined in an `ImageProperties` type."
+"data_offset!(img, n) - Change data_offset defined in an `ImageProperties` type."
 function data_offset!(p::ImageProperties, n::Int)
     p["data_offset"] = n
     return data_offset(p)
 end
 data_offset!(img::ImageMeta{T,N,A,<:ImageProperties}, n::Int) where {T,N,A} =
     data_offset!(properties(img), n)
+function data_offset!(x::T, n::Int) where T
+    if hasproperties(x)
+        data_offset!(properties(x), n)
+    else
+        noprops_error(x)
+    end
+end
 
-"""filename(p) - File names where the image was derived from. Returns `""` by default."""
+"""
+    filename(img) -> String
 
-FileIO.filename(p::ImageProperties) = @get p "filename" ""
+File names where the image was derived from. Returns `""` by default.
+"""
+
+function FileIO.filename(p::ImageProperties)::String
+    out = get(p, "filename", nothing)
+    if isnothing(out)
+        ""
+    else
+        out
+    end
+end
+
 FileIO.filename(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = FileIO.filename(properties(img))
 FileIO.filename(A::AbstractArray) = ""
 
-"filename!(p, file) - Change filename defined in an `ImageProperties` type."
+"filename!(img, file) - Change filename defined in an `ImageProperties` type."
 function filename!(p::ImageProperties, file::String)
     p["filename"] = file
     return file
 end
-filename!(img::ImageMeta{T,N,A,<:ImageProperties}, file::String) where {T,N,A} =
-    filename!(properties(img), file)
+function filename!(x::T, file::String) where T
+    if hasproperties(x)
+        filename!(properties(x), file)
+    else
+        noprops_error(x)
+    end
+end
 
 """
     modality(p)
@@ -42,16 +103,27 @@ filename!(img::ImageMeta{T,N,A,<:ImageProperties}, file::String) where {T,N,A} =
 Returns image modality that corresponds to a given `ImageProperties` instance.
 """
 modality(p::ImageProperties) = get(p, "modality", "")::String
-modality(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = modality(properties(img))
-modality(a::AbstractArray{T}) where T = ""
+function modality(x::T) where T
+    if hasproperties(x)
+        modality(properties(x))
+    else
+        ""
+    end
+end
 
 """
-    header(p)
+    header(img)
+
+Returns header information stored in the image properties.
 """
 header(p::ImageProperties) = get(p, "header", nothing)
-header(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = header(properties(img))
-header(a::AbstractArray{T}) where T = nothing
-
+function header(x::T) where T
+    if hasproperties(x)
+        header(properties(x))
+    else
+        nothing
+    end
+end
 
 "popheader!(p, key, default)"
 popheader!(p::ImageProperties, key::String, default) = pop!(header(d), key, default)
@@ -64,12 +136,25 @@ pushheader!(d::ImageProperties, kv::Pair{String}) = push!(header())
 pushheader!(d::ImageProperties, kv) = insert!(header(d), kv[1], kv[2])
 pushheader!(img::ImageMeta{T,N,A,<:ImageProperties}, kv) where {T,N,A} =
     pushheader!(properties(img), kv)
+pushheader!() where {T,N,A} =
+    pushheader!(properties(img), kv)
 
 "description(p) - Retrieves description field that may say whatever you like."
-description(p::Union{ImageProperties,ImageMeta}) = @get p "description" ""
-description(img::ImageMeta{T,N,A,P}) where {T,N,A<:AbstractArray,P<:ImageProperties} =
-    description(properties(img))
-description(a::AbstractArray{T}) where T = ""
+function description(p::Union{ImageProperties,ImageMeta})::String
+    out = get(p, "description", nothing)
+    if isnothing(out)
+        [""]
+    else
+        out
+    end
+end
+function description(x::T) where T
+    if hasproperties(x)
+        description(properties(x))
+    else
+        ""
+    end
+end
 
 
 "description!(p, descrip) - Change description defined in an `ImageProperties` type."
@@ -79,26 +164,78 @@ end
 description!(img::ImageMeta{T,N,A,<:ImageProperties}, descrip::String) where {T,N,A} =
     description!(properties(img), descrip)
 
+function description!(x::T, descrip::String) where T
+    if hasproperties(x)
+        description!(properties(x), val)
+    else
+        noprops_error(x)
+    end
+end
+
 "calmax(p) - Specifies maximum element for display puproses"
 calmax(p::ImageProperties) = get(p, "calmax", 1)
-calmax(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = calmax(properties(img))
-calmax(a::AbstractArray{T}) where T = maximum(a)
+function calmax(x::AbstractArray{T}) where T
+    if hasproperties(x)
+        calmax(properties(x))
+    else
+        maximum(x)
+    end
+end
+function calmax(x::T) where T
+    if hasproperties(x)
+        calmax(properties(x))
+    else
+        noprops_error(x)
+    end
+end
 
 "calmax!(p, val) - Change calmax defined in an `ImageProperties` type."
 function calmax!(p::ImageProperties, val)
     p["calmax"] = val
 end
+function calmax!(x::T, val) where T
+    if hasproperties(x)
+        calmax!(properties(x), val)
+    else
+        noprops_error(x)
+    end
+end
+
 
 "calmin - Specifies minimum element for display puproses."
 calmin(d::ImageProperties) = get(d, "calmin", -1)
-calmin(img::ImageMeta{T,N,A,<:ImageProperties}) where {T,N,A} = calmin(properties(img))
-calmin(a::AbstractArray{T}) where T = minimum(a)
+function calmin(x::AbstractArray{T}) where T
+    if hasproperties(x)
+        calmin(properties(x))
+    else
+        minimum(a)
+    end
+end
+function calmin(x::T) where T
+    if hasproperties(x)
+        calmin(properties(x))
+    else
+        noprops_error(x)
+    end
+end
 
 "calmin!(p, val) - Change calmin defined in an `ImageProperties` type."
 function calmin!(p::ImageProperties, val)
     p["calmin"] = val
     return val
 end
+
+function calmin!(x::T, val) where T
+    if hasproperties(x)
+        calmin!(properties(x), val)
+    else
+        noprops_error(x)
+    end
+end
+
+
+
+
 
 function forward_properties(::Type{A}) where A
     # TODO
@@ -118,26 +255,7 @@ function forward_properties(::Type{A}) where A
         Base.delete!(d::$A, k::String) = (delete!(properties(d), k); d)
 
 
-        auxfiles(d::$A) = auxfiles(properties(d))
-        header(d::$A) = header(properties(d))
-
-        description(d::$A) = description(properties(d))
-        description!(d::$A, descrip::String) = description!(properties(d), descript)
-
-
         FileIO.filename(d::$A) = filename(properties(d))
-        filename!(d::$A, file::String) = filename!(properties(d), file)
-
-        data_offset(d::$A) = data_offset(properties(d))
-        data_offset!(d::$A, n::Int) = data_offset!(properties(d), n)
-
-        modality(d::$A) = modality(properties(d))
-
-        calmax(d::$A) = calmax(properties(d))
-        calmax!(d::$A, val) = calmax!(properties(d), val)
-
-        calmin(d::$A) = calmin(properties(d))
-        calmin!(d::$A, val) = calmin!(properties(d), val)
     end
 end
 

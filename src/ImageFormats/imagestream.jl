@@ -7,6 +7,10 @@ mutable struct ImageStream{T,N,Ax,P,IOType}
     end
 end
 
+ImageStream(f::AbstractString, info::ImageInfo) = ImageStream(query(f), info)
+
+ImageStream(s::Stream, ::Nothing) = ImageStream(s, metadata(s))
+
 function ImageStream{T}(io::IOType, indices::Ax, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,Ax,IOType<:IO}
     ImageStream(io, ImageInfo{T}(indices, ImageProperties(properties; copyprops=copyprops)))
 end
@@ -18,10 +22,7 @@ end
 ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="r", copyprops::Bool=false) where {T,N} =
     ImageStream(query(f), ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
 
-ImageStream(f::AbstractString, info::ImageInfo) = ImageStream(query(f), info)
-
-
-getinfo(img::ImageStream) = img.info
+getinfo(img::ImageStream) = getfield(img, :info)
 
 # array like interface
 Base.ndims(s::ImageStream{T,N}) where {T,N} = N

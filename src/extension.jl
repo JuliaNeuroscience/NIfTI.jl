@@ -37,7 +37,7 @@ for (k, v) in NiftiEcode
 end
 
 """
-NIfTI Extension Codes
+    NIfTI Extension Codes
 
 * Ignore
 * DICOM: intended for raw DICOM attributes
@@ -68,7 +68,7 @@ ecode(img::ImageMeta) = ecode(extension(img))
 
 # Calculates the size of a NIfTI extension
 """
-esize(ex::NiftiExtension)
+    esize(ex::NiftiExtension)
 
 NiftiExtensions should be of a byte size that is a mulitple of 16. This includes
 raw encoding of the the `ecode` (as an Int32) and the esize itself (also as an

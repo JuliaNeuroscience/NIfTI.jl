@@ -110,6 +110,8 @@ intent(A::AbstractVector{<:RGBA}) = GiftiRGBA
 
 """
     intentname(img)
+
+Returns the name for the the image intent specified in the NIfTI header.
 """
 #intentname(img::ImageFormat{format"NII"}) = img["header"]["intentname"]
 
@@ -127,6 +129,8 @@ intentname() = String(fill(UInt8(0), 16))
 
 """
     intentparams(img)
+
+Collects the 
 """
 intentparams(img::NiftiFormat) where {T,N,A} = intentparams(properties(img))
 intentparams(s::ImageStream) = intentparams(properties(s))
@@ -134,7 +138,6 @@ intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Floa
 
 intentparams(p::ImageProperties) = intentparams(header(p))
 intentparams(p::ImageProperties{:header}) = @get p "intentparams" Float64[0, 0, 0]
-intentparams(::Nothing) = Float64[0, 0, 0]
 
 
 # array dimensions are in row major form
@@ -196,5 +199,3 @@ intentaxis(s, pixdim, ::Type{DisplacementVector}) = Axis{:vecdim}(range(1, lengt
 intentaxis(s, pixdim, ::Type{SVector}) = Axis{:vecdim}(range(1, length=s.size[5]))
 intentaxis(s, pixdim, ::Type{GiftiRGB}) = Axis{:colordim}(1:3)
 intentaxis(s, pixdim, ::Type{GiftiRGBA}) = Axis{:colordim}(1:4)
-
-

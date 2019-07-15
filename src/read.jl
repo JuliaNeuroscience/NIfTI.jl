@@ -33,9 +33,8 @@ function load(f::File{DataFormat{:NII}}, sink::Type{<:AbstractArray}=MetaAxisArr
     end
 end
 =#
-function loadstreaming(s::File{DataFormat{:NII}}; mode::String="r")
-    loadstreaming(open(s, mode))
-end
+
+loadstreaming(s::File{DataFormat{:NII}}; mode::String="r") = loadstreaming(open(s, mode))
 
 function loadstreaming(s::Stream{DataFormat{:NII},GZip.GZipStream})
     m = loadmeta(s)
@@ -67,7 +66,6 @@ function metadata(s::File{DataFormat{:NII}})
         metadata(s)
     end
 end
-
 
 function nitype(s::ImageInfo)
     if s["header"]["magic"] == NP1_MAGIC
@@ -125,7 +123,7 @@ function readhdr1(s::IO, p::ImageProperties)
     skip(s, (7-N)*2)  # skip filler dims
 
     # intent parameters
-    p["header"]["intentparams"] = (float.(read!(s, Vector{Int32}(undef, 3)))...,)
+    p["header"]["intentparams"] = Tuple(float.(read!(s, Vector{Int32}(undef, 3))))::NTuple{3,Float64}
     p["header"]["intent"] = get(NiftiIntents, read(s, Int16), NoIntent)
     T = get(NiftiDatatypes, read(s, Int16), UInt8)
 
@@ -133,7 +131,7 @@ function readhdr1(s::IO, p::ImageProperties)
     skip(s, 2)
     p["header"]["slicestart"] = Int(read(s, Int16)) + 1  # to 1 based indexing
 
-    qfac = read(s, Float32)
+    p["header"]["qfac"] = read(s, Float32)
     pixdim = (read!(s, Vector{Float32}(undef, N))...,)
 
     skip(s, (7-N)*4)  # skip filler dims
@@ -142,7 +140,7 @@ function readhdr1(s::IO, p::ImageProperties)
     p["header"]["scaleslope"] = Float64(read(s, Float32))
     p["header"]["scaleintercept"] = Float64(read(s, Float32))
     p["header"]["sliceend"] = Int(read(s, Int16) + 1)  # to 1 based indexing
-    p["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int8), "Unkown")
+    p["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int8), "Unkown")::String
 
     xyzt_units = Int32(read(s, Int8))
 
@@ -157,22 +155,28 @@ function readhdr1(s::IO, p::ImageProperties)
 
     p["header"]["qformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
     p["header"]["sformcode"] = get(NiftiXForm, read(s, Int16), :Unkown)
-    qb = read(s, Float32)
-    qc = read(s, Float32)
-    qd = read(s, Float32)
-    qx = read(s, Float32)
-    qy = read(s, Float32)
-    qz = read(s, Float32)
 
+    p["header"]["quaternb"] = read(s, Float32)
+    p["header"]["quaternc"] = read(s, Float32)
+    p["header"]["quaternd"] = read(s, Float32)
+    p["header"]["qoffsetx"] = read(s, Float32)
+    p["header"]["qoffsety"] = read(s, Float32)
+    p["header"]["qoffsetz"] = read(s, Float32)
     # FIXME
     p["header"]["sform"] = permutedims(SArray{Tuple{4,4},Float32,2,16}(
                                         (read!(s, Vector{Float32}(undef, 12))...,
                                          Float32[0, 0, 0, 1]...)), (2,1))
     p["header"]["intentname"] = String(read(s, 16))
-    p["header"]["magic"] = (read(s, 4)...,)
+    p["header"]["magic"] = Tuple(read(s, 4))::NTuple{4,UInt8}
 
     if p["header"]["sformcode"] == :Unkown
-        qf = quat2mat(qb, qc, qd, qx, qy, qz, pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., qfac)
+        qf = quat2mat(p["header"]["quaternb"],
+                      p["header"]["quaternc"],
+                      p["header"]["quaternc"],
+                      p["header"]["qoffsetx"],
+                      p["header"]["qoffsety"],
+                      p["header"]["qoffsetz"], pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
+
         p["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
     else
         p["spacedirections"] = (Tuple(p["header"]["sform"][1,1:3]),
@@ -182,7 +186,7 @@ function readhdr1(s::IO, p::ImageProperties)
 
     p["header"]["extension"] = read(s, p, NiftiExtension)
 
-    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
+    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"], pixdim, p), p)
 end
 
 function readhdr2(s::IO, p::ImageProperties)
@@ -197,7 +201,7 @@ function readhdr2(s::IO, p::ImageProperties)
 
     p["header"]["intentparams"] = (read!(s, Vector{Float64}(undef, 3))...,)
 
-    qfac = read(s, Float64)
+    p["header"]["qfac"] = read(s, Float64)
     pixdim = (read!(s, Vector{Float64}(undef, N))...,)
     skip(s, (7-N)*8)  # skip filler dims
 
@@ -217,12 +221,12 @@ function readhdr2(s::IO, p::ImageProperties)
     p["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
     p["header"]["sformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
 
-    qb = read(s, Float64)
-    qc = read(s, Float64)
-    qd = read(s, Float64)
-    qx = read(s, Float64)
-    qy = read(s, Float64)
-    qz = read(s, Float64)
+    p["header"]["quaternb"] = read(s, Float64)
+    p["header"]["quaternc"] = read(s, Float64)
+    p["header"]["quaternd"] = read(s, Float64)
+    p["header"]["qoffsetx"] = read(s, Float64)
+    p["header"]["qoffsety"] = read(s, Float64)
+    p["header"]["qoffsetz"] = read(s, Float64)
 
     p["header"]["sform"] = transpose(
                                    SMatrix{4,4,Float64,16}(
@@ -237,7 +241,12 @@ function readhdr2(s::IO, p::ImageProperties)
     skip(s, 15)
 
     if p["header"]["sformcode"] ==  :Unkown
-        qf = quat2mat(qb, qc, qd, qx, qy, qz, pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., qfac)
+        qf = quat2mat(p["header"]["quaternb"],
+                      p["header"]["quaternc"],
+                      p["header"]["quaternc"],
+                      p["header"]["qoffsetx"],
+                      p["header"]["qoffsety"],
+                      p["header"]["qoffsetz"], pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
         p["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
     else
         p["spacedirections"] = (Tuple(p["header"]["sform"][1,1:3]),
@@ -246,5 +255,5 @@ function readhdr2(s::IO, p::ImageProperties)
     end
     p["header"]["extension"] = read(s, p, NiftiExtension)
 
-    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, qx, qy, qz, pixdim, p), p)
+    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"], pixdim, p), p)
 end

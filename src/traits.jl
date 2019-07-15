@@ -14,7 +14,7 @@ for (k, v) in NiftiSliceCodes
 end
 
 """
-    scaleslope --> Float64
+    scaleslope(img) -> Float64
 
 The values stored in each voxel can be scaled, allowing storage of voxels as
 smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
