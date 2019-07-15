@@ -170,14 +170,13 @@ function readhdr1(s::IO, p::ImageProperties)
     p["header"]["magic"] = Tuple(read(s, 4))::NTuple{4,UInt8}
 
     if p["header"]["sformcode"] == :Unkown
-        qf = quat2mat(p["header"]["quaternb"],
-                      p["header"]["quaternc"],
-                      p["header"]["quaternc"],
-                      p["header"]["qoffsetx"],
-                      p["header"]["qoffsety"],
-                      p["header"]["qoffsetz"], pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
+        p["header"]["qform"] = quat2mat(p["header"]["quaternb"], p["header"]["quaternc"], p["header"]["quaternc"],
+                                        p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"],
+                                        pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
 
-        p["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
+        p["spacedirections"] = (Tuple(p["header"]["qform"][1,1:3]),
+                                Tuple(p["header"]["qform"][2,1:3]),
+                                Tuple(p["header"]["qform"][3,1:3]))
     else
         p["spacedirections"] = (Tuple(p["header"]["sform"][1,1:3]),
                                 Tuple(p["header"]["sform"][2,1:3]),
@@ -241,13 +240,13 @@ function readhdr2(s::IO, p::ImageProperties)
     skip(s, 15)
 
     if p["header"]["sformcode"] ==  :Unkown
-        qf = quat2mat(p["header"]["quaternb"],
-                      p["header"]["quaternc"],
-                      p["header"]["quaternc"],
-                      p["header"]["qoffsetx"],
-                      p["header"]["qoffsety"],
-                      p["header"]["qoffsetz"], pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
-        p["spacedirections"] = (Tuple(qf[1,1:3]), Tuple(qf[2,1:3]), Tuple(qf[3,1:3]))
+        p["header"]["qform"] = quat2mat(p["header"]["quaternb"], p["header"]["quaternc"], p["header"]["quaternc"],
+                                        p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"],
+                                        pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
+
+        p["spacedirections"] = (Tuple(p["header"]["qform"][1,1:3]),
+                                Tuple(p["header"]["qform"][2,1:3]),
+                                Tuple(p["header"]["qform"][3,1:3]))
     else
         p["spacedirections"] = (Tuple(p["header"]["sform"][1,1:3]),
                                 Tuple(p["header"]["sform"][2,1:3]),

@@ -183,4 +183,10 @@ end
     @test spatialorder(img) == (:L2R, :P2A, :I2S)
 end
 
+
+@testset "Save Array" begin
+    save(TEMPNII_FILE, rand(4,4,4))
+    img = load(File(format"NII", TEMPNII_FILE))
+end
+
 #img2 = permutedims(img, (2,1,3,4))

@@ -143,7 +143,7 @@ pushheader!() where {T,N,A} =
 function description(p::Union{ImageProperties,ImageMeta})::String
     out = get(p, "description", nothing)
     if isnothing(out)
-        [""]
+        ""
     else
         out
     end

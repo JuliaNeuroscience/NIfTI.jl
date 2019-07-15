@@ -1,3 +1,5 @@
+
+
 """
     ImageInfo
 
@@ -5,22 +7,50 @@
 ```jldoctest
 ```
 """
-
 struct ImageInfo{T,N,Ax,P}
     axes::Ax
     properties::P
 end
 
-ImageInfo{T}(indices::Ax) where {T,Ax} =
-    ImageInfo{T,length(indices),Ax}(indices, properties(io))
+function ImageInfo{T}(indices::Ax;
+                      format::DataFormat=DataFormat{:Nothing}()
+                     ) where {T,Ax}
 
-ImageInfo{T}(indices::Ax, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,Ax} =
-    ImageInfo{T,length(indices),Ax}(indices, ImageProperties(properties; copyprops=copyprops))
+    return ImageInfo{T,length(indices),Ax}(indices, ImageProperties{typeof(format)}())
+end
 
-ImageInfo(A::AbstractArray{T,N}; copyprops::Bool=false) where {T,N} =
-    ImageInfo{T,N,typeof(AxisArrays.axes(A))}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops))
+function ImageInfo{T}(indices::Ax,
+                      properties::AbstractDict{String,Any};
+                      copyprops::Bool=false,
+                      format::DataFormat=DataFormat{:Nothing}()
+                     ) where {T,Ax}
 
-ImageInfo{T,N,Ax}(indices::Ax, props::P) where {T,N,Ax,P} = ImageInfo{T,N,Ax,P}(indices, props)
+    return ImageInfo{T,length(indices),Ax}(indices, ImageProperties{typeof(format)}(properties; copyprops=copyprops))
+end
+
+function ImageInfo(A::AbstractArray{T,N};
+                   copyprops::Bool=false,
+                   format::DataFormat=DataFormat{:Nothing}()
+                  ) where {T,N}
+
+    return ImageInfo{T,N,typeof(AxisArrays.axes(A))}(AxisArrays.axes(A), ImageProperties{typeof(format)}(A; copyprops=copyprops))
+end
+
+function ImageInfo(img::ImageInfo{T,N,Ax,ImageProperties{F1}};
+                   copyprops::Bool=false,
+                   format::DataFormat=F1()
+                  ) where {T,N,Ax,F1}
+
+    if format == F1
+        return img
+    else
+        return ImageInfo(axes(img), ImageProperties{typeof(format)}(properties(img)))
+    end
+end
+
+function ImageInfo{T,N,Ax}(indices::Ax, props::P) where {T,N,Ax,P}
+    ImageInfo{T,N,Ax,P}(indices, props)
+end
 
 ImageMetadata.properties(img::ImageInfo{T,N,Ax,P}) where {T,N,Ax,P} = img.properties::P
 
@@ -68,12 +98,10 @@ ImageCore.spacedirections(s::ImageInfo) = @get s "spacedirections" ImageCore._sp
 #Base.names(img::ImageInfo{T,N,L}, i::Int) where {T,N,L} = L[i]
 #AxisArrays.axisvalues(s::ImageStream) = axisvalues(axes(s)...)
 
-
-
 # ImageCore interface
 ImageCore.spatialorder(img::ImageInfo) = ImageAxes.filter_space_axes(axes(img), axisnames(img))
 
-ImageCore.size_spatial(img::ImageInfo)    = ImageAxes.filter_space_axes(axes(img), size(img))
+ImageCore.size_spatial(img::ImageInfo) = ImageAxes.filter_space_axes(axes(img), size(img))
 
 ImageCore.indices_spatial(img::ImageInfo) = ImageAxes.filter_space_axes(axes(img), axes(img))
 

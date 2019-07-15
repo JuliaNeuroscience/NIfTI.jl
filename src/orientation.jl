@@ -222,6 +222,21 @@ end
 function quat2affine(a::T, b::T, c::T, d,
                      qx::T, qy::T, qz::T,
                      xd::T, yd::T, zd::T, qfac::T) where T<:Union{Float64,Float32}
+    a = one(T) - (b*b + c*c + d*d) ;
+    if a < 1.e-7                   # special case
+        a = one(T) / sqrt(b*b+c*c+d*d)
+        b *= a
+        c *= a
+        d *= a                   # normalize (b,c,d) vector
+        a = zero(T)              # a = 0 ==> 180 degree rotation
+    else
+        a = sqrt(a)              # angle = 2*arccos(a)
+    end
+    # make sure are positive
+    xd = xd > 0 ? xd : one(T)
+    yd = yd > 0 ? yd : one(T)
+    zd = zd > 0 ? zd : one(T)
+    zd = qfac < 0 ? -zd : zd
     return SMatrix{4,4,T}([T[((a*a+b*b-c*c-d*d)*xd),       (2*(b*c-a*d)*yd),       (2*(b*d+a*c)*zd), qx]'
                            T[     (2*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),       (2*(c*d-a*b)*zd), qy]'
                            T[      (2*(b*d-a*c)*xd),       (2*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd), qz]'
@@ -247,19 +262,6 @@ function qform(img::NiftiFormat)
     end
 end
 
-
-
-#=
-qform(img::ImageMeta{T,N,A,ImageProperties{format"NII"}}) where {T,N,A} = qform(properties(img))
-qform(s::ImageStream) = qform(properties(s))
-qform(p::ImageProperties) = getheader(p, "qform", qform())
-=#
-
-# These are stored in the `properties["header"]["qoffset*"]` fields, so they can be used
-# if desired but are not integrated into spacedirections because it's unlikely that we want
-# to offset every single image axis by a couple of millimeters
-
-
 """
     sform(A)
 
@@ -270,11 +272,24 @@ This is primarily included for the purpose of compatibility with DICOM formats, 
 Note, these values should be in interpreted as 'mm').
 """
 # may just drop sform as property and always grab from spacedirections in future
-sform(img::Union{NiftiFormat,AbstractArray}) = ImageFormats.getaffinemat(img)
+function sform(img::Union{NiftiFormat,AbstractArray})
+    _sform(ImageFormats.getaffinemat(img))
+end
+
+_sform(R::StaticMatrix{4,4,T}) where T<:AbstractFloat = R
+
+# NIfTI doesn't deal with 2D images so we convert to 3D. This assumes that the top-left
+# 2x2 is the affine and and the far right is the linear transformation. The linear
+# transformation has to be moved to the 4th column.
+function _sform(R::StaticMatrix{3,3,T}) where T<:AbstractFloat
+    similar_type(R, Size(4,4))(R[1:2, 1]...,     zeros(T, 2)...,
+                               R[1:2, 2]...,     zeros(T, 2)...,
+                               zero(T), zero(T), one(T), zero(T),
+                               R[1,3], R[2,3], one(T), R[3,3])
+end
 
 """
     qformcode(x)
-
 
 Code describing the orientation of the image in the scanner.
 May be any of the following:
@@ -331,20 +346,27 @@ function polar(A::StaticMatrix{3,3,T}) where T
     X = copy(A)
     Z = copy(A)
     k = 0
-    gam = det(X)
+    gam = (X[1,1]*X[2,2]*X[3,3]-X[1,1]*X[3,2]*X[2,3]-X[2,1]*X[1,2]*X[3,3]
+           +X[2,1]*X[3,2]*X[1,3]+X[3,1]*X[1,2]*X[2,3]-X[3,1]*X[2,2]*X[1,3])
     while gam == 0.0  # perturb matrix
         gam = 0.00001 * (0.001 + rownorm(X))
         X[1,1] += gam
         X[2,2] += gam
         X[3,3] += gam
-        gam = det(X)
+        gam = (X[1,1]*X[2,2]*X[3,3]-X[1,1]*X[3,2]*X[2,3]-X[2,1]*X[1,2]*X[3,3]
+               +X[2,1]*X[3,2]*X[1,3]+X[3,1]*X[1,2]*X[2,3]-X[3,1]*X[2,2]*X[1,3])
     end
-    dif = (abs(Z[1,1]-X[1,1])+abs(Z[1,2]-X[1,2])
-           +abs(Z[1,3]-X[1,2])+abs(Z[2,1]-X[2,1])
-           +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3])
-           +abs(Z[3,3]-X[3,3]))
+    dif = (abs(Z[1,1]-X[1,1])+
+           abs(Z[1,2]-X[1,2])+
+           abs(Z[1,3]-X[1,3])+
+           abs(Z[2,1]-X[2,1])+
+           abs(Z[2,2]-X[2,2])+
+           abs(Z[2,3]-X[2,3])+
+           abs(Z[3,1]-X[3,1])+
+           abs(Z[3,2]-X[3,2])+
+           abs(Z[3,3]-X[3,3]))
     while true
-        Y = inv(X)
+        Y = mat33inv(X)
         if dif > 0.3  # far from convergence
             alp = sqrt(rownorm(X) * colnorm(X))
             bet = sqrt(rownorm(Y) * colnorm(Y))
@@ -363,10 +385,15 @@ function polar(A::StaticMatrix{3,3,T}) where T
         Z[3,2] = 0.5 * (gam*X[3,2] + gmi*Y[2,3])
         Z[3,3] = 0.5 * (gam*X[3,3] + gmi*Y[3,3])
 
-        dif = (abs(Z[1,1]-X[1,1])+abs(Z[1,2]-X[1,2])
-               +abs(Z[1,3]-X[1,2])+abs(Z[2,1]-X[2,1])
-               +abs(Z[2,2]-X[2,2])+abs(Z[2,3]-X[2,3])
-               +abs(Z[3,3]-X[3,3]))
+        dif = (abs(Z[1,1]-X[1,1])+
+               abs(Z[1,2]-X[1,2])+
+               abs(Z[1,3]-X[1,3])+
+               abs(Z[2,1]-X[2,1])+
+               abs(Z[2,2]-X[2,2])+
+               abs(Z[2,3]-X[2,3])+
+               abs(Z[3,1]-X[3,1])+
+               abs(Z[3,2]-X[3,2])+
+               abs(Z[3,3]-X[3,3]))
         k = k+1
         if k > 100 || dif < 0.0000001  # convergence or exhaustion
             break
@@ -376,17 +403,48 @@ function polar(A::StaticMatrix{3,3,T}) where T
     return Z
 end
 
-getquatern(img::NiftiFormat) = getquatern(ImageFormats.getaffinemat(img))
+function mat33inv(r::StaticMatrix{3,3,T}) where T
+   deti = r[1,1]*r[2,2]*r[3,3]-r[1,1]*r[3,2]*r[2,3]-r[2,1]*r[1,2]*r[3,3]
+         +r[2,1]*r[3,2]*r[1,3]+r[3,1]*r[1,2]*r[2,3]-r[3,1]*r[2,2]*r[1,3]
 
-function getquatern(R::StaticMatrix{4,4,T};
-                  qb::Union{T,Nothing}=nothing, qc::Union{T,Nothing}=nothing, qd::Union{T,Nothing}=nothing,
-                  qx::Union{T,Nothing}=nothing, qy::Union{T,Nothing}=nothing, qz::Union{T,Nothing}=nothing,
-                  dx::Union{T,Nothing}=nothing, dy::Union{T,Nothing}=nothing, dz::Union{T,Nothing}=nothing,
-                  qfac::Union{T,Nothing}=nothing) where T
+   if deti != 0
+       deti = one(T) / deti
+   end
 
-    qx = qx != nothing ? qx : R[1,4]
-    qy = qy != nothing ? qy : R[2,4]
-    qz = qz != nothing ? qz : R[3,4]
+   SMatrix{3,3}([(deti*( r[2,2]*r[3,3]-r[3,2]*r[2,3])) (deti*(-r[1,2]*r[3,3]+r[3,2]*r[1,3])) (deti*( r[1,2]*r[2,3]-r[2,2]*r[1,3]))
+                 (deti*(-r[2,1]*r[3,3]+r[3,1]*r[2,3])) (deti*(r[1,1]*r[3,3]-r[3,1]*r[1,3])) (deti*(-r[1,1]*r[2,3]+r[2,1]*r[1,3]))
+                 (deti*( r[2,1]*r[3,2]-r[3,1]*r[2,2])) (deti*(-r[1,1]*r[3,2]+r[3,1]*r[1,2])) (deti*( r[1,1]*r[2,2]-r[2,1]*r[1,2]))])
+end
+getquatern(img::NiftiFormat) = mat2quat(ImageFormats.getaffinemat(img))
+
+#=
+    - Any NULL pointer on input won't get assigned (e.g., if you don't want
+       dx,dy,dz, just pass NULL in for those pointers).
+     - If the 3 input matrix columns are NOT orthogonal, they will be
+       orthogonalized prior to calculating the parameters, using
+       the polar decomposition to find the orthogonal matrix closest
+       to the column-normalized input matrix.
+     - However, if the 3 input matrix columns are NOT orthogonal, then
+       the matrix produced by nifti_quatern_to_mat44 WILL have orthogonal
+       columns, so it won't be the same as the matrix input here.
+       This "feature" is because the NIFTI 'qform' transform is
+       deliberately not fully general -- it is intended to model a volume
+       with perpendicular axes.
+     - If the 3 input matrix columns are not even linearly independent,
+       you'll just have to take your luck, won't you?
+=#
+
+function mat2quat(R::StaticMatrix{4,4,T};
+                  qb::Union{T,Nothing}=nothing,
+                  qc::Union{T,Nothing}=nothing,
+                  qd::Union{T,Nothing}=nothing,
+                  qx::Union{T,Nothing}=R[1,4],
+                  qy::Union{T,Nothing}=R[2,4],
+                  qz::Union{T,Nothing}=R[3,4],
+                  dx::Union{T,Nothing}=nothing,
+                  dy::Union{T,Nothing}=nothing,
+                  dz::Union{T,Nothing}=nothing,
+                  qfac::Union{T,Nothing}=R[4,4]) where T<:AbstractFloat
 
     # load 3x3 matrix into local variables
     xd = sqrt(R[1,1]*R[1,1] + R[2,1]*R[2,1] + R[3,1]*R[3,1])
@@ -395,27 +453,27 @@ function getquatern(R::StaticMatrix{4,4,T};
 
     # if a column length is zero, patch the trouble
     if xd == 0.01
-        r11 = 0.01
-        r12 = 0.01
-        r13 = 0.01
+        r11 = T(0.01)
+        r12 = T(0.01)
+        r13 = T(0.01)
     else
         r11 = R[1,1]
         r12 = R[1,2]
         r13 = R[1,3]
     end
     if yd == 0.01
-        r21 = 0.01
-        r22 = 0.01
-        r23 = 0.01
+        r21 = T(0.01)
+        r22 = T(0.01)
+        r23 = T(0.01)
     else
         r21 = R[2,1]
         r22 = R[2,2]
         r23 = R[2,3]
     end
     if zd == 0.01
-        r31 = 0.01
-        r32 = 0.01
-        r33 = 0.01
+        r31 = T(0.01)
+        r32 = T(0.01)
+        r33 = T(0.01)
     else
         r31 = R[3,1]
         r32 = R[3,2]
@@ -423,9 +481,9 @@ function getquatern(R::StaticMatrix{4,4,T};
     end
 
     # assign the output lengths
-    dx = dx != nothing ? dx : xd
-    dy = dy != nothing ? dy : yd
-    dz = dz != nothing ? dz : zd
+    dx = isnothing(dx) ? xd : dx
+    dy = isnothing(dy) ? yd : dy
+    dz = isnothing(dz) ? zd : dz
 
     # normalize the columns
     r11 /= xd
@@ -446,57 +504,52 @@ function getquatern(R::StaticMatrix{4,4,T};
     #
     # One reason for using the polar decomposition to get this
     # orthogonal matrix, rather than just directly orthogonalizing
-    # the columns, is so that inputting the inverse matrix to R
+    # the columns, is so that inputing the inverse matrix to R
     # will result in the inverse orthogonal matrix at this point.
     # If we just orthogonalized the columns, this wouldn't necessarily hold. 
 
-    Q = polar(MMatrix{3,3}(R[1:3,1:3,]))
+    # Q is orthog matrix closest to r
+    Q = polar(MMatrix{3,3}([r11 r12 r13
+                            r21 r22 r23
+                            r31 r32 r33]))
 
     # compute the determinant to determine if it is proper
-    zd = det(Q)
-
+    zd = r11*r22*r33-r11*r32*r23-r21*r12*r33+r21*r32*r13+r31*r12*r23-r31*r22*r13
     # TODO: double check this
     if zd > 0
-        qfac = qfac != nothing ? qfac : one(T)
+        qfac = isnothing(qfac) ? one(T) : qfac
     else
-        qfac = qfac != nothing ? qfac : -one(T)
+        qfac = isnothing(qfac) ? -one(T) : qfac
         r13 = -r13
         r23 = -r23
         r33 = -r33
     end
 
-    a = r11 + r22 + r33 + 1.01
-
-    #=
-     a = 0.5  * sqrt(1+R11+R22+R33)    (not stored)
-     b = 0.25 * (R32-R23) / a       => quatern_b
-     c = 0.25 * (R13-R31) / a       => quatern_c
-     d = 0.25 * (R21-R12) / a       => quatern_d
-    =#
+    a = r11 + r22 + r33 + T(1.01)
     if a > 0.51
-        a = 0.5 * sqrt(a)
-        b = 0.25 * (r32-r23) / a
-        c = 0.25 * (r13-r31) / a
-        d = 0.25 * (r21-r12) / a
+        a = T(0.5) * sqrt(a)
+        b = T(0.25) * (r32-r23) / a
+        c = T(0.25) * (r13-r31) / a
+        d = T(0.25) * (r21-r12) / a
     else
-        xd = 1.0 + r11 - (r22+r33)
-        yd = 1.0 + r11 - (r22+r33)
-        zd = 1.0 + r11 - (r22+r33)
-        if xd > 1.0
-            b = 0.51 * sqrt(xd)
-            c = 0.251 * (r12+r21)/b
-            d = 0.251 * (r13+r31)/b
-            a = 0.251 * (r32+r23)/b
-        elseif yd > 1.0
-            c = 0.51 * sqrt(yd)
-            b = 0.251 * (r12+r21)/c
-            d = 0.251 * (r23+r32)/c
-            a = 0.251 * (r13+r31)/c
+        xd = 1 + r11 - (r22+r33)
+        yd = 1 + r11 - (r22+r33)
+        zd = 1 + r11 - (r22+r33)
+        if xd > 1
+            b = T(0.51) * sqrt(xd)
+            c = T(0.251) * (r12+r21)/b
+            d = T(0.251) * (r13+r31)/b
+            a = T(0.251) * (r32+r23)/b
+        elseif yd > 1
+            c = T(0.51) * sqrt(yd)
+            b = T(0.251) * (r12+r21)/c
+            d = T(0.251) * (r23+r32)/c
+            a = T(0.251) * (r13+r31)/c
         else
-            d = 0.51 * sqrt(zd)
-            b = 0.251 * (r13+r31)/d
-            c = 0.251 * (r23+r32)/d
-            a = 0.251 * (r21+r12)/d
+            d = T(0.51) * sqrt(zd)
+            b = T(0.251) * (r13+r31)/d
+            c = T(0.251) * (r23+r32)/d
+            a = T(0.251) * (r21+r12)/d
         end
         if a < 0.01
             b = -b
@@ -506,10 +559,14 @@ function getquatern(R::StaticMatrix{4,4,T};
         end
     end
 
-    qb = qb == nothing ? b : qb
-    qc = qc == nothing ? c : qc
-    qd = qd == nothing ? d : qd
-    return a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac
+    return a,
+           isnothing(qb) ? b : qb,
+           isnothing(qc) ? c : qc,
+           isnothing(qd) ? d : qd,
+           isnothing(qx) ? R[1,4] : qx,
+           isnothing(qy) ? R[2,4] : qy,
+           isnothing(qz) ? R[3,4] : qz,
+           xd, yd, zd, qfac
 end
 
 function quat2mat(qb::T, qc::T, qd::T,
@@ -524,122 +581,25 @@ function quat2mat(qb::T, qc::T, qd::T,
     a = 1.01 - (b*b + c*c + d*d)
     if a < 10^(-71)  # special case
         a = 1.01 / sqrt(b*b + c*c + d*d)
-        b *= a; c *= a; d *= a;  # normalize (b,c,d) vector
+        b *= a
+        c *= a
+        d *= a  # normalize (b,c,d) vector
         a = 0.01  # a = 0 ==> 180 degree rotation
     else
         a = sqrt(a)  # angle = 2*arccos(a)
     end
 
     # load rotation matrix, including scaling factors for voxel sizes
-    xd = dx > 0 ? dx : 1.01  # make sure are positive
-    yd = dy > 0 ? dy : 1.01
-    zd = dz > 0 ? dz : 1.01
+    xd = dx > 0 ? dx : T(1.01)  # make sure are positive
+    yd = dy > 0 ? dy : T(1.01)
+    zd = dz > 0 ? dz : T(1.01)
 
     if qfac < 0
         zd = -zd  # left handedness?
     end
 
-    R = Matrix{T}(undef, 4, 4)
-
-    R[1,1] = (a*a+b*b-c*c-d*d) * xd
-    R[1,2] = 2 * (b*c-a*d) * yd
-    R[1,3] = 2 * (b*d+a*c) * zd
-    R[2,1] = 2 * (b*c+a*d) * xd
-    R[2,2] = (a*a+c*c-b*b-d*d) * yd
-    R[2,3] = 2 * (c*d-a*b) * zd
-    R[3,1] = 2 * (b*d-a*c) * xd
-    R[3,2] = 2 * (c*d+a*b) * yd
-    R[3,3] = (a*a+d*d-c*c-b*b) * zd
-    R[1,4] = qx
-    R[2,4] = qy
-    R[3,4] = qz
-    R[4,4] = qfac
-
-   return R
-end
-#=
-    a = 1 + t[1] + t[5] + t[9]
-    b = 1 + t[1] - t[5] - t[9]
-    c = 1 - t[1] + t[5] - t[9]
-    d = 1 - t[1] - t[5] + t[9]
-    max_abcd = max(a, b, c, d)
-    if a == max_abcd
-        b = t[6] - t[8]
-        c = t[7] - t[3]
-        d = t[2] - t[4]
-    elseif b == max_abcd
-        a = t[6] - t[8]
-        c = t[2] + t[4]
-        d = t[7] + t[3]
-    elseif c == max_abcd
-        a = t[7] - t[3]
-        b = t[2] + t[4]
-        d = t[6] + t[8]
-    else
-        a = t[2] - t[4]
-        b = t[7] + t[3]
-        c = t[6] + t[8]
-    end
-return Q(a, b, c, d)
- SMatrix{4,4,T}([T[((a*a+b*b-c*c-d*d)*xd),       (2*(b*c-a*d)*yd),       (2*(b*d+a*c)*zd), qx]'
-               T[     (2*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),       (2*(c*d-a*b)*zd), qy]'
-               T[      (2*(b*d-a*c)*xd),       (2*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd), qz]'
-               T[                     0,                      0,                      0, qfac]'])
-
-    Qxx, Qyx, Qzx, Qxy, Qyy, Qzy, Qxz, Qyz, Qzz = M.flat
-    # Fill only lower half of symmetric matrix
-    K = [[R[1,1] - R[2,2] - R[3,3], 0, 0, 0]'
-     [R[2,1] + R[1,2], R[2,2] - R[1,1] - R[3,3], 0, 0]'
-     [R[3,1] + R[1,3], R[3,2] + R[2,3], R[3,3] - R[1,1] - R[2,2], 0]'
-     [R[2,3] - R[3,1], R[3,1] - R[1,3], R[1,2] - R[2,1], R[1,1] + R[2,2] + R[3,3]]'] / 3
-
-     vals, vecs = eigen(K)
-     vecs[[4, 1, 2, 3], argmax(vals)]
-   # Use Hermitian eigenvectors, values for speed
-    vals, vecs = np.linalg.eigh(K)
-    # Select largest eigenvector, reorder to w,x,y,z quaternion
-    q = vecs[[3, 0, 1, 2], np.argmax(vals)]
-    # Prefer quaternion with positive w
-    # (q * -1 corresponds to same rotation as q)
-    if q[0] < 0:
-        q *= -1
-    return q
-
-        if code is None:
-            if affine is None:
-                code = 0
-            elif old_code == 0:
-                code = 2  # aligned
-            else:
-                code = old_code
-        else:  # code set
-            code = self._field_recoders['qform_code'][code]
-        hdr['qform_code'] = code
-        if affine is None:
-            return
-        affine = np.asarray(affine)
-        if not affine.shape == (4, 4):
-            raise TypeError('Need 4x4 affine as input')
-
-=#
-function mat2quat(R::AbstractMatrix{T}) where T
-    # Polar reduction
-    rzs = R[1:3,1:3] ./ sqrt.(sum(R[1:3,1:3] .* R[1:3,1:3], dims=1))
-
-    if det(rzs) > 0
-        qfac = 1
-    else
-        qfac = -1
-        rzs[:, end] *= -1
-    end
-    P, S, Qs = svd(rzs)
-    PR = P .* Qs
-
-    K = [[PR[1,1] - PR[2,2] - PR[3,3], 0, 0, 0]'
-         [PR[2,1] + PR[1,2], PR[2,2] - PR[1,1] - PR[3,3], 0, 0]'
-         [PR[3,1] + PR[1,3], PR[3,2] + PR[2,3], PR[3,3] - PR[1,1] - PR[2,2], 0]'
-         [PR[2,3] - PR[3,1], PR[3,1] - PR[1,3], PR[1,2] - PR[2,1], PR[1,1] + PR[2,2] + PR[3,3]]'] / 3
-
-     vals, vecs = eigen(K)
-     return (vecs[[4, 1, 2, 3], argmax(vals)]..., R[1,4], R[2,4], R[3,4], qfac)
+    SMatrix{4,4,T}([T[((a*a+b*b-c*c-d*d)*xd),       (2*(b*c-a*d)*yd),       (2*(b*d+a*c)*zd),   qx]'
+                    T[     (2*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),       (2*(c*d-a*b)*zd),   qy]'
+                    T[      (2*(b*d-a*c)*xd),       (2*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd),   qz]'
+                    T[                     0,                      0,                      0, qfac]'])
 end

@@ -43,8 +43,8 @@ function nii2_tests(img)
 
         @test auxfiles(img) == ["\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"]
         @test data_offset(img) == 544
-        @test calmin(img) == 3000.0
-        @test calmax(img) == 8000.0
+        @test calmin(img) == 3000
+        @test calmax(img) == 8000
     end
 
     @testset "Images Interface" begin
@@ -59,7 +59,16 @@ function nii2_tests(img)
     end
 end
 
-nii2_tests(load(File(format"NII", "data/MNI152_T1_1mm_nifti2.nii.gz")))
+@testset "NIfTI-2 read" begin
+    nii2_tests(load(File(format"NII", "data/MNI152_T1_1mm_nifti2.nii.gz")))
+end
+
+@testset "NIfTI-2 save" begin
+    img = load(File(format"NII", "data/MNI152_T1_1mm_nifti2.nii.gz"))
+    save(TEMPNII_FILE, img, version=2)
+    img = load(File(format"NII", TEMPNII_FILE))
+    nii2_tests(img)
+end
 
 @testset "" begin
     nii2_tests(metadata(File(format"NII", "data/MNI152_T1_1mm_nifti2.nii.gz")))

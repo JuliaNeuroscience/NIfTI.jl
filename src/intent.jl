@@ -128,16 +128,25 @@ intentname(A::AbstractArray) = intentname()
 intentname() = String(fill(UInt8(0), 16))
 
 """
-    intentparams(img)
+    intentparams(img) -> NTuple{3,AbstractFloat}
 
-Collects the 
+Returns the parameters associated with the NIfTI intent. Defaults to 
 """
 intentparams(img::NiftiFormat) where {T,N,A} = intentparams(properties(img))
 intentparams(s::ImageStream) = intentparams(properties(s))
-intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
-
 intentparams(p::ImageProperties) = intentparams(header(p))
-intentparams(p::ImageProperties{:header}) = @get p "intentparams" Float64[0, 0, 0]
+
+function intentparams(p::ImageProperties{:header})
+    out = get(p, "intentparams", nothing)
+    if out isa Nothing
+        return Tuple(0.0, 0.0, 0.0)
+    else
+        return out
+    end
+end
+intentparams(A::AbstractArray) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
+# this covers situations where there is no header
+intentparams(A::Nothing) = ntuple(_->float(0), Val(3))::Tuple{Float64,Float64,Float64}
 
 
 # array dimensions are in row major form

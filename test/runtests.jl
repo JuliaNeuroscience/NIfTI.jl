@@ -1,8 +1,6 @@
 # TODO
-# - test io on example
-# - test orientation on LR/RL image
-# - test NIfTI-2 io
-# - test endian values
+# - qform: this will be tricky because there will probably be a margin of error no matter
+#  what we do. (it always tries to align to 3 dimensional axes in NIfTI standard)
 # - test intent
 #   - statistics
 using FileIO, NIfTI, ImageMetadata, ImageCore, ImageAxes, GZip, Test, Unitful

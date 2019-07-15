@@ -1,4 +1,4 @@
-mutable struct ImageStream{T,N,Ax,P,IOType}
+struct ImageStream{T,N,Ax,P,IOType}
     io::IOType
     info::ImageInfo{T,N,Ax,P}
 
@@ -11,16 +11,72 @@ ImageStream(f::AbstractString, info::ImageInfo) = ImageStream(query(f), info)
 
 ImageStream(s::Stream, ::Nothing) = ImageStream(s, metadata(s))
 
-function ImageStream{T}(io::IOType, indices::Ax, properties::AbstractDict{String,Any}; copyprops::Bool=false) where {T,Ax,IOType<:IO}
-    ImageStream(io, ImageInfo{T}(indices, ImageProperties(properties; copyprops=copyprops)))
+function ImageStream{T}(io::IOType,
+                        indices::Ax,
+                        properties::AbstractDict{String,Any};
+                        copyprops::Bool=false,
+                        format::DataFormat=DataFormat{:NOTHING}()
+                       ) where {T,Ax,IOType<:IO}
+
+    return ImageStream(io, ImageInfo{T}(indices, ImageProperties{typeof(format)}(properties; copyprops=copyprops)))
 end
 
-function ImageStream(io::IOType, A::AbstractArray{T,N}; copyprops::Bool=false) where {T,N,IOType}
-    ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
+function ImageStream(io::IOType,
+                     A::AbstractArray{T,N};
+                     copyprops::Bool=false,
+                     format::DataFormat=DataFormat{:NOTHING}()
+                    ) where {T,N,IOType}
+
+    return ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties{typeof(format)}(A; copyprops=copyprops)))
 end
 
-ImageStream(f::AbstractString, A::AbstractArray{T,N}; mode="r", copyprops::Bool=false) where {T,N} =
-    ImageStream(query(f), ImageInfo{T}(AxisArrays.axes(A), ImageProperties(A; copyprops=copyprops)))
+function ImageStream(f::AbstractString,
+                     A::AbstractArray{T,N};
+                     mode="r",
+                     copyprops::Bool=false
+                    ) where {T,N}
+    return ImageStream(query(f), A, mode=mode, copyprops=copyprops)
+end
+
+function ImageStream(f::File{F},
+                     A::AbstractArray{T,N};
+                     mode="r",
+                     copyprops::Bool=false
+                    ) where {F,T,N}
+
+    return ImageStream(open(f, mode), A, copyprops=copyprops)
+end
+
+function ImageStream(s::Stream{F}, A::AbstractArray; copyprops::Bool=fale) where F
+    ImageStream(s, ImageInfo(A, copyprops=copyprops, format=F()))
+end
+
+function ImageStream(s::Stream{F,IOType}, info::ImageInfo) where {F,T,N,IOType}
+
+    if file_extension(s) == ".gz"
+        return ImageStream(Stream(F, gzdopen(stream(s)), filename(s)), info)
+    else
+        return ImageStream(stream(s), info)
+    end
+end
+
+function ImageStream(s::Stream{F,GZip.GZipStream},
+                     info::ImageInfo;
+                     version::Int=1
+                    ) where F
+
+    return ImageStream(stream(s), info)
+end
+
+function savestreaming(s::Stream{DataFormat{:NII},IOType}, info::ImageInfo; version::Int=1) where IOType
+    if file_extension(s) == ".gz"
+        return savestreaming(ImageStream(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)), info), version=version)
+    else
+        return savestreaming(ImageStream(stream(s), info), version=version)
+    end
+end
+
+
 
 getinfo(img::ImageStream) = getfield(img, :info)
 

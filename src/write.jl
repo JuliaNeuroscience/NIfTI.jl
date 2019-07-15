@@ -1,26 +1,37 @@
-#TODO:
-# Should probably update the qform stuff too
-# (although a lot of software seems to just skip this)
+function save(f::Formatted{DataFormat{:NII}},
+              A::AbstractArray;
+              version::Int=1,
+              copyprops::Bool=false
+             )
 
-
-function save(f::Formatted{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false)
     anew = nieltransform(A)
-    write(savestreaming(f, anew; version=version, copyprops=copyprops), anew)
+    s = savestreaming(f, anew; version=version, copyprops=copyprops)
+    write(s, anew)
+    flush(stream(s))
     return nothing
 end
 
-savestreaming(s::File{DataFormat{:NII}}, A::AbstractArray; version::Int=1, copyprops::Bool=false) =
-    savestreaming(open(s, "w"), A, version=version, copyprops=copyprops)
+function savestreaming(s::File{DataFormat{:NII}},
+                       A::AbstractArray;
+                       version::Int=1,
+                       copyprops::Bool=false
+                      )
 
-savestreaming(s::Stream{DataFormat{:NII},GZip.GZipStream}, A::AbstractArray; version::Int=1, copyprops::Bool=false) =
-    savemeta(ImageStream(stream(s), ImageInfo(A, copyprops=copyprops)), version=version)
+    return savestreaming(open(s, "w"), A, version=version, copyprops=copyprops)
+end
 
-function savestreaming(s::Stream{DataFormat{:NII},IOType}, A::AbstractArray; version::Int=1, copyprops::Bool=false) where IOType
-    if file_extension(s) == ".gz"
-        return savestreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)), A, version=version, copyprops=copyprops)
-    else
-        return savemeta(ImageStream(stream(s), ImageInfo(A, copyprops=copyprops)), version=version)
-    end
+function savestreaming(s::Stream{DataFormat{:NII}},
+                       A::AbstractArray;
+                       version::Int=1,
+                       copyprops::Bool=false
+                      )
+
+    return savestreaming(ImageStream(s, A, copyprops=copyprops), version=version)
+end
+
+function savestreaming(s::NiftiStream; version::Int=1)
+    savemeta(s, version=version)
+    return s
 end
 
 function savemeta(s::ImageStream; version::Int=1)
@@ -57,7 +68,8 @@ function writehdr1(s::ImageStream{T}) where T
     write(s, Int16(sizeof(T)*8))                              # 72 - bitpix::Int16
     write(s, Int16(slicestart(s) - 1))                        # 74 - slice_start::Int16 - NOTE: go to zero based indexing
     write(s, convert(Vector{Float32}, pixdim(s, qfac)))       # 76 - pixdim::NTuple{8,Float32}
-    write(s, Float32(voxoffset(s, Val(1))))                   # 108 - vox_offset::Float32
+    data_offset!(s, voxoffset(s, Val(1)))
+    write(s, Float32(data_offset(s)))                         # 108 - vox_offset::Float32
     write(s, Float32(scaleslope(s)))                          # 112 - scl_slope::Float32
     write(s, Float32(scaleintercept(s)))                      # 116 - scl_inter::Float32
     write(s, Int16(sliceend(s) - 1))                          # 120 - slice_end::Int16 - NOTE: go to zero based indexing
@@ -104,7 +116,7 @@ end
 
 function writehdr2(s::ImageStream{T}) where T
     sf = sform(s)
-    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquattern(s)
+    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquatern(s)
 
     write(s, Int32(540))                                 # 0 - sizeof_hdr::Int32
     write(s, [NP2_MAGIC...])                                  # 4 - magic::NTuple{8,UInt8}
@@ -113,7 +125,8 @@ function writehdr2(s::ImageStream{T}) where T
     write(s, convert(Vector{Int64}, nidim(s)))           # 16 - dim::NTuple{8,Int64}
     write(s, convert(Vector{Float64}, [intentparams(s)...]))  # 80 - intent_[1:3]
     write(s, convert(Vector{Float64}, pixdim(s, qfac)))        # 104 - pixdim::NTuple{8,Float64}
-    write(s, Int64(voxoffset(s, Val(2))))                # 168 - vox_offset::Int64
+    data_offset!(s, voxoffset(s, Val(2)))
+    write(s, Int64(data_offset(s)))                      # 168 - vox_offset::Int64
     write(s, Float64(scaleslope(s)))                     # 176 - scl_slope::Float64
     write(s, Float64(scaleintercept(s)))                 # 184 - scl_inter::Float64
     write(s, Float64(calmax(s)))                         # 192 - cal_max::Float64

@@ -20,7 +20,11 @@ include("ImageFormats/ImageFormats.jl")
 using .ImageFormats
 using .ImageFormats: @get
 
-NiftiFormat = Union{ImageStream,ImageMeta{T,N,A,ImageProperties{format"NII"}},ImageInfo} where {T,N,A}
+const NiftiStream{T,N,Ax,IOType} = ImageStream{T,N,Ax,ImageProperties{DataFormat{:NII}},IOType}
+const NiftiInfo{T,N,Ax} = ImageInfo{T,N,Ax,ImageProperties{DataFormat{:NII}}}
+const NiftiImage{T,N,Ax,D} = ImageMeta{T,N,AxisArray{T,N,D,Ax},ImageProperties{format"NII"}}
+
+NiftiFormat{T,N,Ax} = Union{NiftiStream{T,N,Ax},NiftiInfo{T,N,Ax},NiftiImage{T,N,Ax}}
 
 include("dictionaries.jl")
 include("traits.jl")

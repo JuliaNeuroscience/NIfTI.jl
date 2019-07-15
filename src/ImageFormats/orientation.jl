@@ -74,12 +74,16 @@ getaffine(img::Union{AbstractArray,ImageStream,ImageInfo}) =
 getlinear(img::Union{AbstractArray,ImageStream,ImageInfo}) =
     _getlinear(spacedirections(img))
 
-function _getlinear(sd::NTuple{2,NTuple{2,T}}) where T
-    SMatrix{3,3,T}(sd[1][1], sd[2][1],
+function _getlinear(sd::NTuple{N,NTuple{N,T}}) where {N,T<:Integer}
+    _getlinear(Tuple([float.(x) for x in sd]))
+end
+
+function _getlinear(sd::NTuple{2,NTuple{2,T}}) where T<:AbstractFloat
+    SMatrix{2,2,T}(sd[1][1], sd[2][1],
                    sd[1][2], sd[2][2])
 end
 
-function _getlinear(sd::NTuple{3,NTuple{3,T}}) where T
+function _getlinear(sd::NTuple{3,NTuple{3,T}}) where T<:AbstractFloat
     SMatrix{3,3,T}(sd[1][1], sd[2][1], sd[3][1],
                    sd[1][2], sd[2][2], sd[3][2],
                    sd[1][3], sd[2][3], sd[3][3])
@@ -112,8 +116,8 @@ function _getaffinemat(lin::SMatrix{N,N,Tlin}, trans::SVector{N,Ttrans}) where {
 end
 
 function _getaffinemat(lin::SMatrix{2,2,T}, trans::SVector{2,T}) where T
-    SMatrix{3,3,T}(lin[1:3, 1]..., zero(T),
-                   lin[1:3, 2]..., zero(T),
+    SMatrix{3,3,T}(lin[1:2, 1]..., zero(T),
+                   lin[1:2, 2]..., zero(T),
                    trans..., sign(det(lin)))
 end
 
