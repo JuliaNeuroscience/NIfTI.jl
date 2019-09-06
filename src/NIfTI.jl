@@ -363,7 +363,7 @@ function NIVolume(
         slice_start, (qfac, voxel_size..., time_step, 0, 0, 0), 352,
         scl_slope, scl_inter, slice_end, slice_code,
         xyzt_units, cal_max, cal_min, slice_duration,
-        toffset, glmax, glmin, string_tuple(descrip, 80), string_tuple(aux_file, 24), (method2 || method3),
+        toffset, glmax, glmin, string_tuple(descrip, 80), string_tuple(aux_file, 24), method2,
         method3, quatern_b, quatern_c, quatern_d,
         qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
         (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
