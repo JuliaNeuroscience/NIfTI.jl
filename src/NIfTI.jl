@@ -5,7 +5,7 @@ module NIfTI
 
 using GZip, Mmap
 
-import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
+import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base.setindex!, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
 function define_packed(ty::DataType)
@@ -143,9 +143,9 @@ mutable struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::R
-
 end
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R} =
     niupdate(new(header, extensions, raw))
 
 NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
@@ -548,5 +548,25 @@ size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
 length(f::NIVolume) = length(f.raw)
 lastindex(f::NIVolume) = lastindex(f.raw)
+setindex!(f::NIVolume{T,N}, v, I::Vararg{Int,N}) where {T,N} = setindex!(f.raw, v, collect(I)...)
+
+# support that slicing returns a NIVolume
+Base.similar(f::NIVolume, ::Type{T}, dims::Dims) where {T} =
+    niupdate(NIVolume(deepcopy(f.header), deepcopy(f.extensions), Array{T, length(dims)}(undef, dims)))
+
+# support elementwise operations returning NIVolume (https://docs.julialang.org/en/v1/manual/interfaces/index.html#man-interfaces-broadcasting-1)
+Base.BroadcastStyle(::Type{<:NIVolume}) = Broadcast.ArrayStyle{NIVolume}()
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{NIVolume}}, ::Type{ElType}) where ElType
+    # Scan the inputs for the NIVolume:
+    f = find_vol(bc)
+    NIVolume(deepcopy(f.header), deepcopy(f.extensions), similar(f, ElType, axes(bc)))
+end
+
+"`f = find_vol(As)` returns the first NIVolume among the arguments."
+find_vol(bc::Base.Broadcast.Broadcasted) = find_vol(bc.args)
+find_vol(args::Tuple) = find_vol(find_vol(args[1]), Base.tail(args))
+find_vol(x) = x
+find_vol(f::NIVolume, rest) = f
+find_vol(::Any, rest) = find_vol(rest)
 
 end
