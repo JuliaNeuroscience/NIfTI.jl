@@ -554,6 +554,9 @@ setindex!(f::NIVolume{T,N}, v, I::Vararg{Int,N}) where {T,N} = setindex!(f.raw, 
 Base.similar(f::NIVolume, ::Type{T}, dims::Dims) where {T} =
     niupdate(NIVolume(deepcopy(f.header), deepcopy(f.extensions), Array{T, length(dims)}(undef, dims)))
 
+Base.:/(f::NIVolume, a::Number) = NIVolume(deepcopy(f.header), deepcopy(f.extensions), f.raw/a)
+Base.:/(a::Number, f::NIVolume) = NIVolume(deepcopy(f.header), deepcopy(f.extensions), a./f.raw)
+
 # support elementwise operations returning NIVolume (https://docs.julialang.org/en/v1/manual/interfaces/index.html#man-interfaces-broadcasting-1)
 Base.BroadcastStyle(::Type{<:NIVolume}) = Broadcast.ArrayStyle{NIVolume}()
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{NIVolume}}, ::Type{ElType}) where ElType
@@ -562,7 +565,7 @@ function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{NIVolume}},
     if length(vols) > 1
         @assert check_compatibility(vols)
     end
-    NIVolume(deepcopy(vols[1].header), deepcopy(vols[1].extensions), similar(vols[1], ElType, axes(bc)))
+    NIVolume(deepcopy(vols[1].header), deepcopy(vols[1].extensions), similar(vols[1], ElType, axes(bc)).raw)
 end
 
 "`find_vols(As)` returns the NIVolumes among the arguments."
