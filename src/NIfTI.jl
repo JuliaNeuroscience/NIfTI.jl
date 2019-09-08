@@ -558,15 +558,32 @@ Base.similar(f::NIVolume, ::Type{T}, dims::Dims) where {T} =
 Base.BroadcastStyle(::Type{<:NIVolume}) = Broadcast.ArrayStyle{NIVolume}()
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{NIVolume}}, ::Type{ElType}) where ElType
     # Scan the inputs for the NIVolume:
-    f = find_vol(bc)
-    NIVolume(deepcopy(f.header), deepcopy(f.extensions), similar(f, ElType, axes(bc)))
+    vols = find_vols(bc)
+    if length(vols) > 1
+        @assert check_compatibility(vols)
+    end
+    NIVolume(deepcopy(vols[1].header), deepcopy(vols[1].extensions), similar(vols[1], ElType, axes(bc)))
 end
 
-"`f = find_vol(As)` returns the first NIVolume among the arguments."
-find_vol(bc::Base.Broadcast.Broadcasted) = find_vol(bc.args)
-find_vol(args::Tuple) = find_vol(find_vol(args[1]), Base.tail(args))
-find_vol(x) = x
-find_vol(f::NIVolume, rest) = f
-find_vol(::Any, rest) = find_vol(rest)
+"`find_vols(As)` returns the NIVolumes among the arguments."
+function find_vols(bc::Base.Broadcast.Broadcasted)
+    vols = []
+    for a in bc.args
+        if a isa NIVolume
+            push!(vols, a)
+        end
+    end
+    vols
+end
+
+# check if all header fields are equal
+allequal(x) = all(y->y==x[1],x)
+function check_compatibility(vols)
+    ret = true
+    for field in fieldnames(NIfTI.NIfTI1Header)
+        ret = ret && allequal([getfield(v.header, field) for v in vols])
+    end
+    ret
+end
 
 end
