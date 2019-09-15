@@ -1,13 +1,23 @@
-struct ImageStream{T,N,Ax,P,IOType}
+struct ImageStream{T,N,Names,Ax,P,IOType}
     io::IOType
-    info::ImageInfo{T,N,Ax,P}
+    info::ArrayInfo{T,N,Names,Ax,P}
 
-    function ImageStream(io::IOType, info::ImageInfo{T,N,Ax,P}) where {T,N,Ax,P,IOType<:IO}
-        new{T,N,Ax,P,IOType}(io, info)
+    function ImageStream(io::IOType, info::ArrayInfo{T,N,Names,Ax,P}) where {T,N,Names,Ax,P,IOType<:IO}
+        new{T,N,Names,Ax,P,IOType}(io, info)
     end
 end
 
-ImageStream(f::AbstractString, info::ImageInfo) = ImageStream(query(f), info)
+ImageCore.HasDimNames(::Type{T}) where T<:ImageStream = HasDimNames{true}()
+Base.names(img::ImageStream{T,N,Names}) where {T,N,Names} = Names
+Base.axes(img::ImageStream) = axes(img.info)
+
+ImageCore.HasProperties(::Type{T}) where T<:ImageStream = HasProperties{true}()
+ImageMetadata.properties(img::ImageStream) = properties(img.info)
+
+
+
+
+ImageStream(f::AbstractString, info::ArrayInfo) = ImageStream(query(f), info)
 
 ImageStream(s::Stream, ::Nothing) = ImageStream(s, metadata(s))
 
@@ -15,19 +25,17 @@ function ImageStream{T}(io::IOType,
                         indices::Ax,
                         properties::AbstractDict{String,Any};
                         copyprops::Bool=false,
-                        format::DataFormat=DataFormat{:NOTHING}()
                        ) where {T,Ax,IOType<:IO}
 
-    return ImageStream(io, ImageInfo{T}(indices, ImageProperties{typeof(format)}(properties; copyprops=copyprops)))
+    return ImageStream(io, ArrayInfo{T}(indices, ImageProperties{typeof(format)}(properties; copyprops=copyprops)))
 end
 
 function ImageStream(io::IOType,
                      A::AbstractArray{T,N};
                      copyprops::Bool=false,
-                     format::DataFormat=DataFormat{:NOTHING}()
                     ) where {T,N,IOType}
 
-    return ImageStream(io, ImageInfo{T}(AxisArrays.axes(A), ImageProperties{typeof(format)}(A; copyprops=copyprops)))
+    return ImageStream(io, ArrayInfo{T}(AxisArrays.axes(A), ImageProperties{typeof(format)}(A; copyprops=copyprops)))
 end
 
 function ImageStream(f::AbstractString,
@@ -48,10 +56,10 @@ function ImageStream(f::File{F},
 end
 
 function ImageStream(s::Stream{F}, A::AbstractArray; copyprops::Bool=fale) where F
-    ImageStream(s, ImageInfo(A, copyprops=copyprops, format=F()))
+    ImageStream(s, ArrayInfo(A, copyprops=copyprops, format=F()))
 end
 
-function ImageStream(s::Stream{F,IOType}, info::ImageInfo) where {F,T,N,IOType}
+function ImageStream(s::Stream{F,IOType}, info::ArrayInfo) where {F,T,N,IOType}
 
     if file_extension(s) == ".gz"
         return ImageStream(Stream(F, gzdopen(stream(s)), filename(s)), info)
@@ -61,14 +69,14 @@ function ImageStream(s::Stream{F,IOType}, info::ImageInfo) where {F,T,N,IOType}
 end
 
 function ImageStream(s::Stream{F,GZip.GZipStream},
-                     info::ImageInfo;
+                     info::ArrayInfo;
                      version::Int=1
                     ) where F
 
     return ImageStream(stream(s), info)
 end
 
-function savestreaming(s::Stream{DataFormat{:NII},IOType}, info::ImageInfo; version::Int=1) where IOType
+function savestreaming(s::Stream{DataFormat{:NII},IOType}, info::ArrayInfo; version::Int=1) where IOType
     if file_extension(s) == ".gz"
         return savestreaming(ImageStream(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)), info), version=version)
     else
@@ -77,21 +85,18 @@ function savestreaming(s::Stream{DataFormat{:NII},IOType}, info::ImageInfo; vers
 end
 
 
-
 getinfo(img::ImageStream) = getfield(img, :info)
 
 # array like interface
 Base.ndims(s::ImageStream{T,N}) where {T,N} = N
 Base.eltype(s::ImageStream{T,N}) where {T,N} = T
+Base.size(s::ImageStream) = size(s.info)
+Base.size(s::ImageStream, i) = size(s.info, i)
+
 
 getheader(s::ImageStream, k::String, default) = getheader(properties(s), k, default)
 
-inherit_imageinfo(ImageStream)
-#=
-TimeAxis,
-HasTimeAxis,
-
-=#
+#inherit_imageinfo(ImageStream)
 
 #Base.copy(d::ImageStream) = ImageFormat{F}(deepcopy(properties(d)))
 ##Base.empty(d::ImageStream{F}) where F = ImageStream{F}()
@@ -102,32 +107,47 @@ Base.isempty(d::ImageStream) = isempty(properties(d))
 Base.in(item, d::ImageStream) = in(item, properties(d))
 
 Base.pop!(d::ImageStream, key, default) = pop!(properties(d), key, default)
+
 Base.pop!(d::ImageStream, key) = pop!(properties(d), key)
+
 Base.push!(d::ImageStream, kv::Pair) = insert!(properties(d), kv)
+
 Base.push!(d::ImageStream, kv) = push!(properties(d), kv)
 
 # I/O Interface #
 FileIO.stream(s::ImageStream) = s.io
 
 Base.seek(s::ImageStream, n::Integer) = seek(stream(s), n)
+
 Base.position(s::ImageStream)  = position(stream(s))
+
 Base.skip(s::ImageStream, n::Integer) = skip(stream(s), n)
+
 Base.eof(s::ImageStream) = eof(stream(s))
+
 Base.isreadonly(s::ImageStream) = isreadonly(stream(s))
+
 Base.isreadable(s::ImageStream) = isreadable(stream(s))
+
 Base.iswritable(s::ImageStream) = iswritable(stream(s))
+
 Base.stat(s::ImageStream) = stat(stream(s))
+
 Base.close(s::ImageStream) = close(stream(s))
+
 Base.isopen(s::ImageStream) = isopen(stream(s))
+
 Base.ismarked(s::ImageStream) = ismarked(stream(s))
+
 Base.mark(s::ImageStream) = mark(stream(s))
+
 Base.unmark(s::ImageStream) = unmark(stream(s))
+
 Base.reset(s::ImageStream) = reset(stream(s))
+
 Base.seekend(s::ImageStream) = seekend(stream(s))
+
 Base.peek(s::ImageStream) = peek(stream(s))
-
-
-
 
 function read(s::ImageStream{T,N}, sink::Type{A};
               mmap::Bool=false, grow::Bool=true, shared::Bool=true) where {T,N,A<:Array}

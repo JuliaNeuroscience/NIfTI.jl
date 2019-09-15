@@ -1,0 +1,68 @@
+function readhdr2(s::IO, p::AbstractDict)
+#    p["header"] = ImageProperties{:header}()
+    p["header"]["magic"] = (read(s, 8)...,)
+    T = get(NiftiDatatypes, read(s, Int16), UInt8)
+    skip(s, 2)  # skip bitpix
+
+    N = read(s, Int64)
+    sz = Tuple(read!(s, Vector{Int64}(undef, N)))
+    skip(s, (7-N)*8)  # skip filler dims
+
+    p["header"]["intentparams"] = (read!(s, Vector{Float64}(undef, 3))...,)
+
+    p["header"]["qfac"] = read(s, Float64)
+    pixdim = (read!(s, Vector{Float64}(undef, N))...,)
+    skip(s, (7-N)*8)  # skip filler dims
+
+    p["data_offset"] = read(s, Int64)
+    p["header"]["scaleslope"] = read(s, Float64)
+    p["header"]["scaleintercept"] = read(s, Float64)
+    p["calmax"] = read(s, Float64)
+    p["calmin"] = read(s, Float64)
+
+    p["header"]["sliceduration"] = read(s, Float64)
+    toffset = read(s, Float64)
+
+    p["header"]["slicestart"] = read(s, Int64) + 1  # to 1 based indexing
+    p["header"]["sliceend"] = read(s, Int64) + 1
+    p["description"] = String(read(s, 80))
+    p["auxfiles"] = [String(read(s, 24))]
+    p["header"]["qformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
+    p["header"]["sformcode"] = get(NiftiXForm, read(s, Int32), :Unkown)
+
+    p["header"]["quaternb"] = read(s, Float64)
+    p["header"]["quaternc"] = read(s, Float64)
+    p["header"]["quaternd"] = read(s, Float64)
+    p["header"]["qoffsetx"] = read(s, Float64)
+    p["header"]["qoffsety"] = read(s, Float64)
+    p["header"]["qoffsetz"] = read(s, Float64)
+
+    p["header"]["sform"] = transpose(
+                                   SMatrix{4,4,Float64,16}(
+                                        (read!(s, Vector{Float64}(undef, 12))..., 0.0, 0.0, 0.0, 1.0)))
+
+    p["header"]["slicecode"] = get(NiftiSliceCodes, read(s, Int32), "Unkown")
+
+    xyzt_units = read(s, Int32)
+    p["header"]["intent"] = get(NiftiIntents, read(s, Int32), NoIntent)
+    p["header"]["intentname"] = String(read(s, 16))
+    p["header"]["diminfo"] = read(s, Int8)
+    skip(s, 15)
+
+    if p["header"]["sformcode"] ==  :Unkown
+        p["header"]["qform"] = quat2mat(p["header"]["quaternb"], p["header"]["quaternc"], p["header"]["quaternc"],
+                                        p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"],
+                                        pixdim[1:min(N,3)]..., zeros(Float64, 3-min(N,3))..., p["header"]["qfac"])
+
+        p["spacedirections"] = (Tuple(p["header"]["qform"][1,1:3]),
+                                Tuple(p["header"]["qform"][2,1:3]),
+                                Tuple(p["header"]["qform"][3,1:3]))
+    else
+        p["spacedirections"] = (Tuple(p["header"]["sform"][1,1:3]),
+                                Tuple(p["header"]["sform"][2,1:3]),
+                                Tuple(p["header"]["sform"][3,1:3]))
+    end
+    p["header"]["extension"] = read(s, p, NiftiExtension)
+
+#    return ImageInfo{T}(niaxes(sz, xyzt_units, toffset, p["header"]["qoffsetx"], p["header"]["qoffsety"], p["header"]["qoffsetz"], pixdim, p), p)
+end

@@ -1,0 +1,10 @@
+
+const TimeAxis{Ax<:AbstractVector} = NamedTuple{(:time,),Tuple{Ax}}
+
+const ColorAxis{Ax<:AbstractVector} = NamedTuple{(:color,),Tuple{Ax}}
+
+is_space_axis(::NamedTuple{(:color,),Tuple}) = false
+
+is_space_axis(::NamedTuple{(:time,),Tuple}) = false
+
+

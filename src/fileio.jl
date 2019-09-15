@@ -1,45 +1,3 @@
-function load(f::File{format"NII"}, sink::Type{<:AbstractArray}=MetaAxisArray,
-    args...; mode="r", mmap::Bool=false)
-    open(f, mode) do s
-        load(s, sink, args...; mmap=mmap)
-    end
-end
-
-function load(s::Stream{format"NII"}, sink::Type{<:AbstractArray}=MetaAxisArray, args...; mmap::Bool=false)
-    read(loadstreaming(s, args...), sink; mmap=mmap)
-end
-
-function loadstreaming(f::File{format"NII"}, args...; mode="r")
-    open(f, mode) do io
-        loadstreaming(io, filename(f))
-    end
-end
-
-loadstreaming(s::Stream{format"NII"}, args...) = nistreaming(stream(s), filename(s))
-
-
-function savestreaming(f::File{format"NII"}, A::AbstractArray; v::Int=2)
-    savestreaming(open(f), A; v=v)
-end
-
-function savestreaming(s::Stream{format"NII"}, A::AbstractArray; v::Int=2, ownstream::Bool=false)
-    if endswith(filename(s), ".gz")
-        io = gzdopen(stream(s))
-    else
-        io = stream(s)
-    end
-    ImageReader{format"NII"}(s, A, false, true)
-end
-
-function save(q::Formatted{format"NII"}, A::AbstractArray; v::Int=2)
-    savestreaming(q, A; v=v) do s
-        write(s)
-        write(s, A)
-    end
-end
-
-
-
 ### This ↓ needs to go in the FileIO registry
 function detectnii(io::IO)
     ret = read(io, Int32)
@@ -60,28 +18,3 @@ function detectnii(io::IO)
         false
     end
 end
-
-function detectimg(io::IO)
-    img_file = filename(io)
-    hdr_file = gethdr(img_file)
-    open(hdr_file, "r") do io
-        detectnii(io)
-    end
-end
-
-add_format(format"NII", detectnii, [".nii", ".nii.gz"], [:NIfTI])
-# Analyze format
-add_format(format"ANZ", detectimg, [".img"], [:NIfTI])
-#add_format(format"ANZ", detectnii, [".hdr"], [:NIfTI])
-
-
-"""
-using NIfTI, AxisArrays, ImageMetadata
-
-const MetaAxisArray{T,N} = ImageMeta{T,N,AxisArray{T,N,Array{T,N}}}
-f = "test/data/example4d.nii"
-io = open(f)
-
-tmp = load(io, MetaAxisArray)
-"""
-

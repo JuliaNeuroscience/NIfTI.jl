@@ -10,53 +10,48 @@ import Base: read, write
 using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
       Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
 
-import GeometryTypes: Triangle, Point
+import GeometryBasics: Triangle, Point, Polygon
 import Rotations: Quat
 import AxisArrays: axisnames, permutation, AxisArray, axistype
 
 import Base64
 
-include("ImageFormats/ImageFormats.jl")
-using .ImageFormats
-using .ImageFormats: @get
-
-const NiftiStream{T,N,Ax,IOType} = ImageStream{T,N,Ax,ImageProperties{DataFormat{:NII}},IOType}
-const NiftiInfo{T,N,Ax} = ImageInfo{T,N,Ax,ImageProperties{DataFormat{:NII}}}
-const NiftiImage{T,N,Ax,D} = ImageMeta{T,N,AxisArray{T,N,D,Ax},ImageProperties{format"NII"}}
-
-NiftiFormat{T,N,Ax} = Union{NiftiStream{T,N,Ax},NiftiInfo{T,N,Ax},NiftiImage{T,N,Ax}}
-
-include("dictionaries.jl")
-include("traits.jl")
-include("orientation.jl")
-include("extension.jl")
-include("intent.jl")
-include("read.jl")
-include("write.jl")
-#include("fileio.jl")
-
 export ImageFormats,
        ImageProperties,
        ImageInfo,
-       ImageStream,
-       # properties
-       timeunits,
-       spatunits,
-       data_offset,
-       spataxes,
-       description,
-       auxfiles,
-       calmin,
-       calmax,
-       header,
-       modality
+       ImageStream
 
+primitive type Float128 <: AbstractFloat 128 end
+const ComplexF128 = Complex{Float128}
+
+BitTypes = Union{Integer,AbstractFloat,ComplexF128,ComplexF32}
+
+
+
+include("./ImageFormats/ImageFormats.jl")
+using .ImageFormats
+
+include("./NeuroIntents/NeuroIntents.jl")
+
+#const NiftiStream{T,N,Ax,IOType} = ImageStream{T,N,Ax,ImageProperties{DataFormat{:NII}},IOType}
+#const NiftiInfo{T,N,Ax} = ImageInfo{T,N,Ax,ImageProperties{DataFormat{:NII}}}
+#const NiftiImage{T,N,Ax,D} = ImageMeta{T,N,AxisArray{T,N,D,Ax},ImageProperties{format"NII"}}
+
+#NiftiFormat{T,N,Ax} = Union{NiftiStream{T,N,Ax},NiftiInfo{T,N,Ax},NiftiImage{T,N,Ax}}
+
+include("dictionaries.jl")
+include("traits.jl")
+include("extension.jl")
+include("load.jl")
+include("readhdr1.jl")
+include("readhdr2.jl")
+include("write.jl")
+#include("fileio.jl")
 
 end
 
 # TODO
 # - should probably implement IndirectArrays for label images
-# - SymmetricMatrix
 # - check shape for Matrix intents
 # - Distribution documentation
 # - write intent methods

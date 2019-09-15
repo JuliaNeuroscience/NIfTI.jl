@@ -1,0 +1,65 @@
+"""
+"""
+function load(
+    f::Formatted{format"NII"},
+    static::Bool=false,
+    mode::String="r",
+    mmap::Bool=false,
+    grow::Bool=true)
+
+    T = guessintent(filename(f), static)
+    read(loadstreaming(f, T, mode=mode), T, mmap=mmap, grow=grow)
+end
+
+
+"""
+"""
+function loadstreaming(s::File{DataFormat{:NII}}; mode::String="r")
+    loadstreaming(open(s, mode))
+end
+
+function loadstreaming(s::Stream{DataFormat{:NII},GZip.GZipStream})
+    m = loadmeta(s)
+    if nitype(m) == "NIfTI-1Double" || nitype(m) == "NIfTI-2Double"
+        ret = ImageStream(gzdopen(open(getimg(filename(s)))), m)
+        close(s)
+    else
+        ret = ImageStream(stream(s), m)
+    end
+    return ret
+end
+
+function loadstreaming(s::Stream{DataFormat{:NII},IOType}) where IOType
+    if file_extension(s) == ".gz"
+        return loadstreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
+    else
+        m = loadmeta(s)
+        if nitype(m) == "NIfTI-1Double" || nitype(m) == "NIfTI-2Double"
+            close(s)
+            return ImageStream(open(getimg(filename(s))), m)
+        else
+            return ImageStream(stream(s), m)
+        end
+    end
+end
+
+
+"""
+    metadata(::DataFormat{:NII}) -> ImageInfo
+"""
+function metadata(s::File{DataFormat{:NII}})
+    open(s) do s
+        metadata(s)
+    end
+end
+
+function metadata(s::Stream{DataFormat{:NII},IOType}) where IOType
+    if file_extension(s) == ".gz"
+        return loadmeta(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
+    else
+        return loadmeta(s)
+    end
+end
+
+metadata(s::Stream{DataFormat{:NII},GZip.GZipStream}) = loadmeta(s)
+

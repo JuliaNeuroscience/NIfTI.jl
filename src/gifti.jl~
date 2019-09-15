@@ -1,0 +1,167 @@
+###
+### Encoding
+###
+#=
+  encoding = c("ASCII",
+               "Base64Binary",
+               "GZipBase64Binary",
+               "ExternalFileBinary"),
+"NIFTI_TYPE_UINT8",
+               "NIFTI_TYPE_INT32",
+               "NIFTI_TYPE_UINT32",
+               "NIFTI_TYPE_FLOAT32"))
+=#
+
+"""
+    GIFTI
+
+A generic GIfTI format
+"""
+intent2ext(::GiftiGeneric) = ".gii"
+
+"""
+    GiftiCoordinates
+"""
+struct GiftiCoordinates end
+intent2ext(::GiftiCoordinate)= ".coord.gii"
+
+"""
+    GiftiFunctional
+"""
+struct GiftiFunctional end
+intent2ext(::GiftiFunctional) = ".func.gii"
+
+"""
+    Labels
+"""
+struct GiftiLabels end
+intent2ext(::GiftiLabels) = ".label.gii"
+
+
+struct GiftiRGB end
+struct GiftiRGBA end
+"""
+    GiftiColor
+
+Extension for GiftiRGB or GiftiRGBA
+"""
+const GiftiColor = Union{GiftiRGB,GiftiRGBA}
+intent2ext(::GiftiRGB) = ".rgba.gii"
+
+"""
+    GiftiShape
+"""
+struct GiftiShape end
+intent2ext(::GiftiShape) = ".shape.gii"
+
+"""
+    GiftiSurface
+"""
+struct GiftiSurface end
+intent2ext(::GiftiSurface) = ".surf.gii"
+
+"""
+Tensors
+"""
+struct GiftiTensors end
+intent2ext(::GiftiTensors) = ".tensor.gii"
+
+"""
+    GiftiTimeSeries
+"""
+struct GiftiTimeSeries end
+intent2ext(::GiftiTimeSeries) = ".time.gii"
+
+"""
+    GiftiTopology
+"""
+struct GiftiTopology end
+intent2ext(::GiftiTopology) = ".topo.gii"
+
+"""
+    GiftiVector
+"""
+struct GiftiVector end
+intent2ext(::GiftiVector) = ".vector.gii"
+
+struct GiftiNodeIndex end
+struct GiftiShape end
+struct GiftiRGB end
+struct GiftiRGBA end
+
+const STRING_INTENTS = Dict(
+    "NIFTI_INTENT_POINTSET" => Point,
+    "NIFTI_INTENT_TRIANGLE" => Triangle,
+    "NIFTI_INTENT_NODE_INDEX" => NodeIndex,
+    "NIFTI_INTENT_NORMAL" => Normal,
+    "NIFTI_INTENT_NONE" => UnknownIntent,
+    "NIFTI_INTENT_SHAPE" => Polygon,
+    "NIFTI_INTENT_LABEL" => NeuroLabels,
+    "NIFTI_INTENT_TIME_SERIES" => "timeseries",
+    "NIFTI_INTENT_RGB_VECTOR" => GiftiRGB,
+    "NIFTI_INTENT_RGBA_VECTOR" => GiftiRGBA,
+    "NIFTI_INTENT_GENMATRIX" => "genmatrix",
+
+    "NIFTI_INTENT_CORREL" => Correlation,
+    "NIFTI_INTENT_TTEST" => TDist,
+    "NIFTI_INTENT_FTEST" => FDist,
+    "NIFTI_INTENT_ZSCORE" => ZScore,
+    "NIFTI_INTENT_CHISQ" => Chisq,
+    "NIFTI_INTENT_BETA" => Beta,
+    "NIFTI_INTENT_BINOM" => Binomial,
+    "NIFTI_INTENT_GAMMA" => Gamma,
+    "NIFTI_INTENT_POISSON" => Poisson,
+    "NIFTI_INTENT_FTEST_NONC" => NoncentralF,
+    "NIFTI_INTENT_CHISQ_NONC" => NoncentralChisq,
+    "NIFTI_INTENT_LOGISTIC" => Logistic,
+    "NIFTI_INTENT_LAPLACE" => Laplace,
+    "NIFTI_INTENT_UNIFORM" => Uniform,
+    "NIFTI_INTENT_TTEST_NONC" => NoncentralT,
+    "NIFTI_INTENT_WEIBULL" => Weibull,
+    "NIFTI_INTENT_CHI" => Chi,
+    "NIFTI_INTENT_INVGAUSS" => InverseGaussian,
+    "NIFTI_INTENT_EXTVAL" => "extval",
+    "NIFTI_INTENT_PVAL" => PValue,
+    "NIFTI_INTENT_LOGPVAL" => LogPValue,
+    "NIFTI_INTENT_LOG10PVAL" => Log10PValue,
+    "NIFTI_INTENT_ESTIMATE" => "estimate",
+
+
+    "NIFTI_INTENT_NEURONAME" => NeuroName,
+
+    "NIFTI_INTENT_SYMMATRIX" => Symmetric,
+    "NIFTI_INTENT_DISPVECT" => DisplacementVector,
+    "NIFTI_INTENT_VECTOR" => SVector,
+
+    "NIFTI_INTENT_QUATERNION" => Quat,
+    "NIFTI_INTENT_DIMLESS" => Dimensionless
+  )
+
+function giftiintent(i::Integer)
+    if i == 2001
+        return TimeSeries
+    elseif i == 2002
+        return Vector{Point}
+    elseif i == 2003
+        return GiftiRGB
+    elseif i == 2004
+        return GiftiRGBA
+    elseif i == 2005
+        return Polygon
+    elseif i == 2006
+       return FSLDisplacementVector
+    elseif i == 2007
+        return FSLCubicSplineCoefficient
+    elseif i == 2008
+        return FSLDCTCoefficients
+    elseif i == 2009
+        return FSLQuadraticSplineCoefficients
+    elseif i == 2016
+        return FSLTopupCubicSplineCoefficients
+    elseif i == 2017
+        return TopupQuadraticSplineCoefficients
+    elseif i == 2018
+        return TopupField
+    end
+end
+

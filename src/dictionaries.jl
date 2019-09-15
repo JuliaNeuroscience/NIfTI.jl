@@ -1,11 +1,6 @@
 const SIZEOF_HDR1 = Int32(348)
 const SIZEOF_HDR2 = Int32(540)
 
-primitive type Float128 <: AbstractFloat 128 end
-const ComplexF128 = Complex{Float128}
-
-BitTypes = Union{Integer,AbstractFloat,ComplexF128,ComplexF32}
-
 const NiftiDatatypes = Dict{Int16,Type}([
     (Int16(2), UInt8),
     (Int16(4), Int16),
@@ -66,15 +61,26 @@ const ANALYZE75_ORIENT = Dict{Symbol,Int16}([
     (:a75_orient_unknown, 6)
 ])
 
-const NiftiXForm = Dict{Int,Symbol}([
-    (Int16(0), :Unkown),
-    (Int16(1), :Scanner_anat),
-    (Int16(2), :Aligned_anat),
-    (Int16(3), :Talairach),
-    (Int16(4), :MNI152)
-])
 
-const NiftiXFormReverse = Dict{Symbol,Int}()
-for (k, v) in NiftiXForm
-    NiftiXFormReverse[v] = k
+"""
+    xform(i) -> CoordinateSpace
+"""
+function xform(i::Union{Int16,Int32})
+    if i == 1
+        return ScannerSpace
+    elseif i == 2
+        return AnatomicalSpace
+    elseif i == 3
+        return TalairachSpace
+    elseif i == 4
+        return MNI152Space
+    else
+        return UnkownSpace
+    end
 end
+
+numerictag(::Type{CoordinateSpace{Sym}}) where {Sym} = Int16(0)
+numerictag(::Type{CoordinateSpace{:scanner}}) = Int16(1)
+numerictag(::Type{CoordinateSpace{:anatomical}}) = Int16(2)
+numerictag(::Type{CoordinateSpace{:tailarach}}) = Int16(3)
+numerictag(::Type{CoordinateSpace{:MNI152}}) = Int16(4)

@@ -83,14 +83,12 @@ function esize(ex::NiftiExtension)
     end
 end
 
-# makes empty extension
-extension(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = extension(properties(img))
-extension(s::ImageStream) = extension(properties(s))
-extension(p::ImageProperties) = getheader(p, "extension", NiftiExtension[])
-extension(A::AbstractArray) = NiftiExtension[]
+
+extension(x::Any) = getter(x, "extension", Vector{NiftiExtension}, NiftiExtension[])
+extension!(x::Any, val::Vector{NiftiExtension}) = setter!(x, "extension", val, Vector{NiftiExtension})
 
 
-function read(io::IO, p::ImageProperties, ::Type{NiftiExtension})
+function read(io::IO, p::AbstractDict, ::Type{NiftiExtension})
     ret = NiftiExtension[]
     if eof(io)
         return ret

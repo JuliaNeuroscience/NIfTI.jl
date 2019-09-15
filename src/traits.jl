@@ -1,154 +1,130 @@
+"""
+    intentname(x)
 
-const NiftiSliceCodes = Dict{Int,String}(
-    0 => "Unkown",
-    1 => "Sequential+Increasing",
-    2 => "Sequential+Decreasing",
-    3 => "Alternating+Increasing",
-    4 => "Alternating+Decreasing",
-    5 => "Alternating+Increasing#2",
-    6 => "Alternating+Decreasing#2")
+Returns the name for the the image intent specified in the NIfTI header.
+"""
+intentname(x::Any) = getter(x, "intentname", String, String(fill(UInt8(0), 16)))
 
-const NiftiSliceCodesReverse = Dict{String,Int16}()
-for (k, v) in NiftiSliceCodes
-    NiftiSliceCodesReverse[v] = k
-end
+intentname!(x::Any, val::AbstractString) = setter!(x, "intentname", String(val), String)
 
 """
-    scaleslope(img) -> Float64
+    scaleslope(x) -> Float64
 
 The values stored in each voxel can be scaled, allowing storage of voxels as
 smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
 These values are ignored for RGB(A) data types.
 """
-scaleslope(img::NiftiFormat) = scaleslope(properties(img))
-scaleslope(p::ImageProperties) = getheader(p, "scaleslope", zero(Float64))::Float64
-scaleslope(A::AbstractArray) = 0.0
+scaleslope(x::Any) = getter(x, "scaleslope", Float64, one(Float64))
+scaleslope!(x::Any, val::Real) = setter!(x, "scaleslope", Float64(val), Float64)
 
 """
-    scaleintercept -> Float64
+    scaleintercept(x) -> Float64
 
 The values stored in each voxel can be scaled, allowing storage of voxels as
 smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
 These values are ignored for RGB(A) data types.
 """
-scaleintercept(img::NiftiFormat) = scaleintercept(properties(img))
-scaleintercept(p::ImageProperties) = getheader(p, "scaleintercept", zero(Float64))::Float64
-scaleintercept(A::AbstractArray) = 0.0
-
-# dimension info for nifti header
-diminfo(img::NiftiFormat) = diminfo(properties(img))
-diminfo(img::ImageInfo) = diminfo(properties(img))
-diminfo(A::AbstractArray) = Int8(0)
-diminfo(p::ImageProperties) = getheader(p, "diminfo", zero(Int8))
+scaleintercept(x::Any) = getter(x, "scaleintercept", Float64, one(Float64))
+scaleintercept!(x::Any, val::Real) = setter!(x, "scaleintercept", Float64(val), Float64)
 
 """
-    frequencydim(x) -> Int8
+    quaternb(x) -> Float64
 
-Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. If not
-applicable to scan type defaults to `0`.
+Returns the quaternion b parameter.
 """
-frequencydim(s) = diminfo(s)::Int8 & Int8(3) + 1
-
-"""
-    phasedim(x) -> Int8
-
-Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. If not
-applicable to scan type defaults to `0`.
-"""
-phasedim(s) = (diminfo(s)::Int8 >> 2) & Int8(3) + 1
+quaternb(x::Any) = getter(x, "quaternb", Float64, zero(Float64))
+quaternb!(x::Any, val::Real) = setter!(x, "quaternb", Float64(val), Float64)
 
 """
-    slicedim(x) -> Int8
+    quaternc(x) -> Float64
 
-Which dimension slices where acquired at throughout MRI acquisition. Defaults
-to size of last dimension.
+Returns the quaternion c parameter.
 """
-slicedim(s) = (diminfo(s)::Int8 >> 4) + 1
+quaternc(x::Any) = getter(x, "quaternc", Float64, zero(Float64))
+quaternc!(x::Any, val::Real) = setter!(x, "quaternc", Float64(val), Float64)
 
+"""
+    quaternd(x) -> Float64
+
+Returns the quaternion d parameter.
+"""
+quaternd(x::Any) = getter(x, "quaternd", Float64, zero(Float64))
+quaternd!(x::Any, val::Real) = setter!(x, "quaternd", Float64(val), Float64)
+
+"""
+    intentparams(x) -> NTuple{3,Float64}
+
+Returns the parameters associated with the NIfTI intent.
+"""
+intentparams(x::Any) = getter(x, "intentparams", NTuple{3,Float64}, (zero(Float64),zero(Float64),zero(Float64)))
+
+"""
+    intentparams!(x, val)
+
+Set the `intentparams` property.
+"""
+intentparams!(x::Any, val::NTuple{3,Float64}) = setter!(x, "intentparams", val, NTuple{3,Float64})
+intentparams!(x::Any, val::NTuple{3,Real}) = setter!(x, "intentparams", Float64.(val), NTuple{3,Float64})
+
+
+
+# NIfTI doesn't deal with 2D images so we convert to 3D. This assumes that the top-left
+# 2x2 is the affine and and the far right is the linear transformation. The linear
+# transformation has to be moved to the 4th column.
+
+# TODO document slicecode
 """
     slicecode(x) -> String
-
-Indicates the timing and pattern of slice acquisition. The following codes are
-defined:
-
-* "Unkown",
-* "Sequential+Increasing"
-* "Sequential+Decreasing"
-* "Alternating+Increasing"
-* "Alternating+Decreasing"
-* "Alternating+Increasing#2"
-* "Alternating+Decreasing#2"
-
 """
-slicecode(img::NiftiFormat) = slicecode(properties(img))
-slicecode(p::ImageProperties) = getheader(p, "slicecode", "Unkown")
-slicecode(A::AbstractArray) = "Unkown"
+slicecode(x::Any) = getter(x, "slicecode", String, "Unkown")
 
+# TODO document slicecode!
 """
-    sliceduration(x) -> Float64
-
-The amount of time necessary to acquire each slice throughout the MRI
-acquisition. Defaults to `0.0`.
+    slicecode!(x, val)
 """
-sliceduration(img::NiftiFormat) = sliceduration(properties(img))
-sliceduration(p::ImageProperties) = getheader(p, "sliceduration", 0.0)
-sliceduration(A::AbstractArray) = 0.0
+slicecode!(x::Any, val::AbstractString) = setter!(x, "slicecode", val, String)
 
-"""
-    slicestart(x) -> Int
-
-Which slice corresponds to the first slice acquired during MRI acquisition
-(i.e. not padded slices). Defaults to `1`.
-"""
-slicestart(img::NiftiFormat) = slicestart(properties(img))
-slicestart(p::ImageProperties) = getheader(p, "slicestart", 1)
-slicestart(A::AbstractArray) = 1
-
-"""
-    sliceend(x)
-
-Which slice corresponds to the last slice acquired during MRI acquisition
-(i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
-"""
-sliceend(img::NiftiFormat) = _sliceend(properties(img), size(img, slicedim(img)))
-sliceend(img::ImageInfo) = _sliceend(properties(img), size(img, slicedim(img)))
-_sliceend(p::ImageProperties, slice_dim_size::Int) = getheader(p, "sliceend", slice_dim_size)
-sliceend(p::ImageProperties) = getheader(p, "sliceend", 1)
-sliceend(A::AbstractArray) = size(A, ndims(A))
-
-
-
-# these are for internal use in writing nifti headers
-
-function voxoffset(s::ImageStream, v::Val{1})
-    if isempty(extension(s))
-        SIZEOF_HDR1 + 4
+function numeric2slicecode(i::Integer)
+    if i == 1
+        return "Sequential+Increasing"
+    elseif i == 2
+        return "Sequential+Decreasing"
+    elseif i == 3
+        return "Alternating+Increasing"
+    elseif i == 4
+        return "Alternating+Decreasing"
+    elseif i == 5
+        return "Alternating+Increasing#2"
+    elseif i == 6
+        return "Alternating+Decreasing#2"
     else
-        mapreduce(esize, +, extension(s)) + SIZEOF_HDR1 + 4
+        return "Unkown"
     end
 end
 
-function voxoffset(s::ImageStream, v::Val{2})
-    if isempty(extension(s))
-        SIZEOF_HDR2+4
+function slicecode2numeric(i::AbstractString)
+    if i == "Sequential+Increasing"
+        return 1
+    elseif i == "Sequential+Decreasing"
+        return 2
+    elseif i == "Alternating+Increasing"
+        return 3
+    elseif i == "Alternating+Decreasing"
+        return 4
+    elseif i == "Alternating+Increasing#2"
+        return 5
+    elseif i == "Alternating+Decreasing#2"
+        return 6
     else
-        mapreduce(esize, +, extension(s))+SIZEOF_HDR2+4
+        return 0
     end
 end
 
-# Gets dim to be used in header
-nidim(x::ImageStream{T,N}) where {T,N} = [N, size(x)..., fill(1, 8-(N+1))...]
-
-pixdim(s::ImageStream{T,N}, qfac::T2) where {T,N,T2} =
-    [qfac, map(i->T2(ustrip(step(i.val))), axes(s))..., fill(T2(1), 8-(N+1))...]
-
-function xyztunits(s::ImageStream)
-    (get(NiftiUnitsReverse, spatunits(s)[1], Int16(0)) & 0x07) |
-    (get(NiftiUnitsReverse,    timeunits(s), Int16(0)) & 0x38)
+diminfo(x::Any) = to_diminfo(freqdim(x), phasedim(x), slicedim(x))
+function to_diminfo(f::Int, p::Int, s::Int)
+    return ((((Int8(f - 1)) & 0x03)     ) |
+            (((Int8(p - 1)) & 0x03) << 2) |
+            (((Int8(s - 1)) & 0x03) << 4))
 end
 
-toffset(s::ImageStream{T,1}) where T = 0
-toffset(s::ImageStream{T,2}) where T = 0
-toffset(s::ImageStream{T,3}) where T = 0
-toffset(s::ImageStream{T,N}) where {T,N} =
-    ustrip(first(ImageFormats.axisvalues(s)[4]))
+

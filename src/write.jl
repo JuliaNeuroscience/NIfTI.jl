@@ -29,7 +29,7 @@ function savestreaming(s::Stream{DataFormat{:NII}},
     return savestreaming(ImageStream(s, A, copyprops=copyprops), version=version)
 end
 
-function savestreaming(s::NiftiStream; version::Int=1)
+function savestreaming(s::ImageStream; version::Int=1)
     savemeta(s, version=version)
     return s
 end
@@ -44,6 +44,7 @@ function savemeta(s::ImageStream; version::Int=1)
     return s
 end
 
+
 # TODO: this will need to support all the crazy CIFTI formats in the future
 nieltransform(A::AbstractArray{<:BitTypes}) = A
 function nieltransform(A::AbstractArray{T}) where T
@@ -53,13 +54,15 @@ end
 function writehdr1(s::ImageStream{T}) where T
                                                               # offset - C name :: Type
                                                               # -----------------------
+
     sf = sform(s)
-    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquatern(s)
+    a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = mat2quat(s)
 
     write(s, Int32(348))                                      # 0 - sizeof_hdr::Int32
     # data_type::NTuple{10,UInt8}, db_name::NTuple{18,UInt8},
     # extents::Int32, session_error::Int16, regular::Int8
     write(s, fill(Int8(0), 35))
+    # FIXME change to todiminfo
     write(s, Int8(diminfo(s)))                                # 39 - dim_info::Int8
     write(s, convert(Vector{Int16}, nidim(s)))                # 40 - dim::NTuple{8,Int16}
     write(s, convert(Vector{Float32}, [intentparams(s)...]))  # 56 - intent_p1/2/3::Float32
@@ -68,8 +71,8 @@ function writehdr1(s::ImageStream{T}) where T
     write(s, Int16(sizeof(T)*8))                              # 72 - bitpix::Int16
     write(s, Int16(slicestart(s) - 1))                        # 74 - slice_start::Int16 - NOTE: go to zero based indexing
     write(s, convert(Vector{Float32}, pixdim(s, qfac)))       # 76 - pixdim::NTuple{8,Float32}
-    data_offset!(s, voxoffset(s, Val(1)))
-    write(s, Float32(data_offset(s)))                         # 108 - vox_offset::Float32
+    dataoffset!(s, voxoffset(s, Val(1)))
+    write(s, Float32(dataoffset(s)))                         # 108 - vox_offset::Float32
     write(s, Float32(scaleslope(s)))                          # 112 - scl_slope::Float32
     write(s, Float32(scaleintercept(s)))                      # 116 - scl_inter::Float32
     write(s, Int16(sliceend(s) - 1))                          # 120 - slice_end::Int16 - NOTE: go to zero based indexing

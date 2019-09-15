@@ -1,0 +1,86 @@
+# TODO improve @property documentation
+filter_property(p, ::Type{T}, val::V) where {T,V<:T} = val
+function filter_property(p, ::Type{T}, val::V) where {T,V}
+    error("The property $p should only return instances of type $T, got $V")
+end
+
+filter_setproperty(::Type{T}, val::V) where {T,V<:T} = val
+filter_setproperty(::Type{T}, val::V) where {T,V} = convert(T, val)
+
+"""
+    MissingProperty
+
+Internal type used to represent missing property fields.
+"""
+struct MissingProperty end
+const MProperty = MissingProperty()
+
+"""
+    @property(::String, gettype::Function, getdefault::Function)
+
+Defines properties and corresponding getter and setter functions. `gettype`
+finds the appropriate type to return given an input and `getdefault` returns
+the default given a type.
+"""
+macro property(name, getdefaulttype, getdefaultval)
+    propname = Symbol(name)
+    propnamestring = string(propname)
+    setpropname = Symbol(propname, :!)
+    quote
+
+        # getters
+        $(esc(propname))(x::Any) = $(propname)(HasProperties(x), x)
+        $(esc(propname))(hp::HasProperties{true}, x::Any) = $(propname)(hp, x, properties(x))
+        $(esc(propname))(::HasProperties{false}, x::Any) = $(getdefaultval)(x)
+        function $(esc(propname))(::HasProperties{true}, x::Any, p::AbstractDict{String,V}) where {V}
+            val = get(x, $(propnamestring), MProperty)
+            if val isa MissingProperty
+                $(getdefaultval)(x)
+            else
+                if val isa $(getdefaulttype)(x)
+                    return val
+                else
+                    convert($(getdefaulttype)(x), val)
+                end
+            end
+        end
+
+        function $(esc(propname))(::HasProperties{true}, x::Any, p::AbstractDict{Symbol,V}) where {V}
+            val = get(x, $(propname), MProperty)
+            if val isa MissingProperty
+                $(esc(getdefaultval))(x)
+            else
+                if val isa $(esc(getdefaulttype))(x)
+                    return val
+                else
+                    return convert($(esc(getdefaulttype))(x), val)
+                end
+            end
+        end
+
+        # setters
+        $(esc(setpropname))(x::Any, val::Any) = $(setpropname)(x, )
+        function $(esc(setpropname))(::HasProperties{true}, x::Any, val)
+            $(esc(setpropname))(properties(x))
+        end
+        function $(esc(setpropname))(::HasProperties{false}, x::Any, val)
+            noprop_error($(esc(setpropname)), x)
+        end
+        function $(esc(setpropname))(x::AbstractDict{String,V}, val::Any) where {V}
+            if val <: $(esc(getdefaulttype))(x)
+                setindex!(x, val, $(propnamestring))
+            else
+                setindex!(x, convert($(esc(getdefaulttype))(x), val), $(propnamestring))
+            end
+        end
+        function $(esc(setpropname))(x::AbstractDict{Symbol,V}, val) where {V}
+            if val <: $(esc(getdefaulttype))(x)
+                setindex!(x, val, $(esc(propname)))
+            else
+                setindex!(x, convert($(esc(getdefaulttype))(x), val), $(esc(propname)))
+            end
+        end
+
+        nothing
+    end
+end

@@ -1,0 +1,96 @@
+
+# TODO get rid of these once implemeneted in ImageCore
+
+ImageCore.coords_spatial(a::ArrayInfo{T,N,Sym}) where {T,N,Sym} = _coords_spatial(namedaxes(a), 1)
+
+function _coords_spatial(x::NamedTuple{Sym}, i::Int) where {Sym}
+    if first(Sym) === :time
+        _coords_spatial(tail(x), i+1)
+    elseif first(Sym) === :color
+        _coords_spatial(tail(x), i+1)
+    else
+        (i, _coords_spatial(tail(x), i+1)...)
+    end
+end
+
+_coords_spatial(x::NamedTuple{(),Tuple{}}, i::Int) = ()
+
+
+ImageCore.size_size(a::ArrayInfo{T,N,Sym}) where {T,N,Sym} = _size_size(namedaxes(a))
+
+function _coords_size(x::NamedTuple{Sym}) where {Sym}
+    if first(Sym) === :time
+        _coords_size(tail(x))
+    elseif first(Sym) === :color
+        _coords_size(tail(x))
+    else
+        (length(first(x)), _coords_size(tail(x))...)
+    end
+end
+
+_coords_size(x::NamedTuple{(),Tuple{}}, i::Int) = ()
+
+
+
+function indices_spatial(x::Union{ImageStream,ImageInfo})
+    ImageAxes.filter_space_axes(AxisArrays.axes(img), AxisArrays.axes(img))
+end
+spataxes(s::Union{ImageStream,ImageInfo}) = map(i->axes(s, i), coords_spatial(s))
+ImageCore.sdims
+
+## Time dimension
+timedim(x::ArrayInfo) = finddim(x, :time)
+
+timeaxis(x::ArrayInfo) = findaxis(x, :time)
+
+"""
+    timefirst(x)
+
+Returns the first time point of `x`.
+"""
+timefirst(x::Any) = first(timeaxis(x))
+
+"""
+    timeunits(img)
+
+Returns the units (i.e. Unitful.unit) the time axis is measured in. If not available
+`nothing` is returned.
+"""
+timeunits(x::Any) = unit(timeaxis(x))
+
+"""
+    spatialoffset(img)
+
+Provides the offset of each dimension (i.e., where each spatial axis starts).
+"""
+spatialoffset(x) = first.(axes(x))
+
+"""
+    spatunits(img)
+
+Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If not
+available `nothing` is returned for each spatial axis.
+"""
+spatunits(a::Union{AbstractArray,ImageStream,ImageInfo}) =
+    map(i->unit(i[1]), spataxes(a))  # TODO: handle non unitful
+
+
+"""
+    modality(img)
+
+Returns image modality that corresponds to a object.
+"""
+modality(x::T) where T = modality(PropertiesStyle(T), x)
+
+modality(::PropertiesIndex{String}, x::T) where T = getindex(p, "modality")
+
+modality(::PropertiesIndex{Symbol}, x::T) where T = getindex(p, :modality)
+
+modality(::PropertiesNoop, x::T) where T = modality(HasProperties(T), x::T)
+
+modality(::HasProperties{true}, x::T) where T = modality(x, properties(x))
+
+modality(::HasProperties{false}, x::T) where T = ""
+
+modality(x::T, props::P) where {T,P} = modality(PropertiesStyle(T), props)
+

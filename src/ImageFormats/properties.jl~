@@ -1,0 +1,34 @@
+@property("dataoffset", x -> Int, x -> 1)
+
+@property("auxfiles", x -> Vector{String}, x -> [""])
+
+@property("imagefile", x -> String, x -> "")
+
+@property("description", x -> String, x -> "")
+
+@property("freqdim", x -> Int, x -> 1)
+
+@property("slicedim", x -> Int, ndims)
+
+@property("phasedim", x -> Int, x -> 1)
+
+# TODO slice funciton names
+# These should probably be:
+# - slicefirstindex
+# - slicelastindex
+# b/c we aren't technically returning the slice but the index of the slice
+@property("slicestart", x -> Int, x -> 1)
+
+@property("sliceend", x -> Int, x -> 1)
+
+@property("sliceduration", x -> Float64, x -> one(Float64))
+
+_calmax(x::AbstractArray) = maximum(x)
+_calmax(x::Any) = zero(Float64)
+@property("calmax", x -> eltype, _calmax)
+
+_calmin(x::AbstractArray) = minimum(x)
+_calmin(x::Any) = zero(Float64)
+@property("calmin", x -> eltype, _calmin)
+
+

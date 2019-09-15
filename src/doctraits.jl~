@@ -1,0 +1,98 @@
+"""
+    scaleslope(img) -> Float64
+
+The values stored in each voxel can be scaled, allowing storage of voxels as
+smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
+These values are ignored for RGB(A) data types.
+"""
+function scaleslope end
+
+"""
+    scaleintercept -> Float64
+
+The values stored in each voxel can be scaled, allowing storage of voxels as
+smaller datatypes (`scaleslope * stored_value + scaleintercept -> actual_value`).
+These values are ignored for RGB(A) data types.
+"""
+function scaleintercept end
+
+"""
+    slicestart(x) -> Int
+
+Which slice corresponds to the first slice acquired during MRI acquisition
+(i.e. not padded slices). Defaults to `1`.
+"""
+function slicestart end
+
+"""
+    sliceend(x)
+
+Which slice corresponds to the last slice acquired during MRI acquisition
+(i.e. not padded slices). Defaults to `size(x, slicedim(x))`.
+"""
+function sliceend end
+
+"""
+    qformcode(x)
+
+Code describing the orientation of the image in the scanner.
+
+Should only be one of the following:
+
+* UnkownSpace
+* ScannerSpace
+"""
+function qformcode end
+
+"""
+    qformcode!(x, val)
+"""
+function qformcode! end
+
+"""
+    sformcode(x)
+
+Code describing the orientation of the image.
+
+Should only be one of following:
+
+* UnkownSpace
+* AnatomicalSpace
+* TalairachSpace
+* MNI152Space
+"""
+function sformcode end
+
+"""
+    sformcode!(x, val)
+
+Set the coordinate space of `x` to `val`.
+"""
+function sformecode! end
+
+"""
+    intentname(x)
+
+Returns the name for the the image intent specified in the NIfTI header.
+"""
+function intentname end
+
+"""
+    intentparams(img) -> NTuple{3,Float64}
+
+Returns the parameters associated with the NIfTI intent. Defaults to 
+"""
+function intentparams end
+
+"""
+    intentparams!(x, val::NTuple{3,Float64})
+
+Returns the parameters associated with the NIfTI intent. Defaults to 
+"""
+function intentparams! end
+
+
+
+
+
+

@@ -98,6 +98,9 @@ end
 vecview(A::AbstractArray{T,N}) where {T,N} = reinterpret(SVector{size(A,1),T},A)
 extractvec(A::AbstractArray{SVector{L,T}}) where {L,T} = reshape(reinterpret(T, A), (L, Base.tail(size(A))...,))
 
+function eltransform()
+end
+
 #############
 # transform #
 #############

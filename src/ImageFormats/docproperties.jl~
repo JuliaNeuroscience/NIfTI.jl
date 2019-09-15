@@ -1,0 +1,149 @@
+"""
+    dataoffset(img) -> Int
+
+Returns the IO stream offset to data given an type instance. Defaults to 0.
+"""
+function dataoffset end
+
+"""
+    dataoffset!(p, val)
+
+Set the the `data_offset` property.
+"""
+function dataoffset! end
+
+"""
+
+    auxfiles(img) -> Vector{String}
+
+Retrieves string for auxiliary file associated with the image.
+"""
+function auxfiles end
+
+"""
+    auxfiles!(img, val)
+
+Sets the `auxfiles` property. `val` should be a `String` or `Vector{String}`.
+"""
+auxfiles!(x, val::String) = auxfiles!(x, [val])
+
+"""
+    imagefile(img) -> String
+
+Retrieves filename field that may say whatever you like.
+"""
+function imagefile end
+
+"""
+    imagefile!(x, f::String)
+
+Change filename defined in a properties type.
+"""
+function imagefile! end
+
+"""
+
+    description(img) -> String
+
+Retrieves description field that may say whatever you like.
+"""
+function description end
+
+"""
+    description!(x, descrip::String)
+
+Change description defined in an properties type.
+"""
+function description! end
+
+"""
+    freqdim(x) -> Int
+
+Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. If not
+applicable to scan type defaults to `1`.
+"""
+function freqdim end
+
+"""
+    freqdim!(x, val)
+
+Set the frequency dimension of `x` to `val`.
+"""
+function freqdim! end
+
+
+"""
+    slicedim(x) -> Int
+
+Which dimension slices where acquired at throughout MRI acquisition. Defaults
+to the last dimension.
+"""
+function slicedim! end
+
+@property("slicedim", x -> Int, ndims)
+
+
+# TODO slice funciton names
+# These should probably be:
+# - slicefirstindex
+# - slicelastindex
+# b/c we aren't technically returning the slice but the index of the slice
+@property("slicestart", x -> Int, x -> 1)
+
+@property("sliceend", x -> Int, x -> 1)
+
+
+"""
+    sliceduration(x)
+
+The amount of time necessary to acquire each slice throughout the MRI
+acquisition. If the type of `x` doesn't have a specific `sliceduration` method
+specified then the it looks for this information in `x`'s properties. If `x`
+doesn't have any properties then 0 is returned.
+"""
+function sliceduration end
+
+"""
+    sliceduration!(x, val)
+
+Set the sliceduration of `x` to `val`.
+"""
+function sliceduration! end
+
+"""
+    calmax(img)
+
+Specifies maximum element for display puproses"
+"""
+function calmax end
+
+"""
+    calmax!(img, val)
+
+Change calmax defined in an `ImageProperties` type.
+"""
+function calmax! end
+
+"""
+
+    calmin(img)
+
+Specifies minimum element for display puproses.
+"""
+function calmin end
+
+"""
+    calmin!(p, val)
+
+Set the calmin property.
+"""
+function calmin! end
+
+"""
+    phasedim(x) -> Int
+
+Which spatial dimension (1, 2, or 3) corresponds to phase acquisition. By
+default `phasedim` searches for a dimension named `phase`, returning `0::Int`
+if not found.
+"""
+function phasedim end

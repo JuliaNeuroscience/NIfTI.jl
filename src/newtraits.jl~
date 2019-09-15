@@ -1,0 +1,27 @@
+SFormCodes = Union{CoordinateSpace{:unknown},CoordinateSpace{:anatomical},CoordinateSpace{:tailarach},CoordinateSpace{:MNI152Space}}
+@property("sformcode", x -> SFormCodes, x -> UnkownSpace)
+
+const QFormCodes = Union{CoordinateSpace{:unknown},CoordinateSpace{:scanner}}
+@property("sformcode", x -> QFormCodes, x -> UnkownSpace)
+
+@property("quaternb", x -> Float64, x -> zero(Float64))
+
+@property("quaternc", x -> Float64, x -> zero(Float64))
+
+@property("quaternd", x -> Float64, x -> zero(Float64))
+
+@property("qoffsetx", x -> Float64, x -> zero(Float64))
+
+@property("qoffsety", x -> Float64, x -> zero(Float64))
+
+@property("qoffsetz", x -> Float64, x -> zero(Float64))
+
+@property("sform", x -> MMatrix{4,4,Float64,16}, x -> zero(MMatrix{4,4,Float64,16}))
+
+@property("qform", x -> MMatrix{4,4,Float64,16}, x -> zero(MMatrix{4,4,Float64,16}))
+
+@property("intentname", x -> String, x -> "")
+
+@property("scaleslope", x -> Float64, x -> one(Float64))
+
+@property("scaleintercept", x -> Float64, x -> zero(Float64))

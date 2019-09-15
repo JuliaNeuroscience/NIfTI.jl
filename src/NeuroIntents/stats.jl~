@@ -1,0 +1,8 @@
+"""
+    CorrelationCoefficientIntent
+
+    p1 = degrees of freedom
+       R/sqrt(1-R*R) is t-distributed with p1 DOF. */
+"""
+struct CorrelationCoefficientIntent end
+
