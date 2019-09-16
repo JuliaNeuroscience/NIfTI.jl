@@ -1,9 +1,8 @@
-module ImageFormats
 
 using FileIO, StaticArrays, ImageMetadata, ImageAxes, MappedArrays, Mmap, GZip
 using ImageCore
 using Unitful: unit, ustrip
-using GeometryBasics: Point, Mesh
+
 using LinearAlgebra
 using Rotations: Quat
 using CoordinateTransformations: AffineMap
@@ -13,10 +12,8 @@ import AxisArrays: AxisArray, Axis
 import ImageCore: HasDimNames, HasProperties, namedaxes
 import Base: read, read!, write
 
-export ArrayInfo,
-       ImageStream,
-       SwapStream,
-       CoordinateSpace,
+#=
+export CoordinateSpace,
        AbstractLabel,
        NodeIndex,
        # constants
@@ -25,13 +22,11 @@ export ArrayInfo,
        TailarachSpace,
        UnkownSpace,
        MNI152Space,
-       orientationspace,
+       coordinatespace,
+       coordinatespace!,
        # methods
        getter,
        setter!,
-       timeunits,
-       spatunits,
-       spataxes,
        description,
        description!,
        auxfiles,
@@ -69,7 +64,7 @@ export ArrayInfo,
        qform,
        qform!,
        orientation
-
+=#
 
 
 include("semanticpositions.jl")
@@ -77,12 +72,7 @@ using .SemanticPositions
 
 include("coordinatespace.jl")
 include("utils.jl")
-include("property.jl")
 include("docproperties.jl")
-include("swapstreams.jl")
-include("imageinfo.jl")
-include("imagestream.jl")
-include("axes.jl")
 include("orientation.jl")
 include("nodeindex.jl")
 include("labels.jl")
@@ -92,4 +82,3 @@ include("labels.jl")
 
 #const ImageFormat{T,N,A,Ax,F} = ImageMeta{T,N,AxisArray{T,N,A,Ax},ImageProperties{F}}
 
-end

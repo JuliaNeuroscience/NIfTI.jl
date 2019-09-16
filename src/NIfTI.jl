@@ -10,26 +10,22 @@ import Base: read, write
 using TranscodingStreams, CodecZlib, Mmap, ImageMetadata, ImageAxes, ImageCore, ColorTypes,
       Unitful, FileIO, Distributions, LinearAlgebra, StaticArrays, Distributions, MappedArrays
 
-import GeometryBasics: Triangle, Point, Polygon
+import GeometryBasics: Triangle, Point, Polygon, Mesh
 import Rotations: Quat
 import AxisArrays: axisnames, permutation, AxisArray, axistype
 
 import Base64
-
-export ImageFormats,
-       ImageProperties,
-       ImageInfo,
-       ImageStream
 
 primitive type Float128 <: AbstractFloat 128 end
 const ComplexF128 = Complex{Float128}
 
 BitTypes = Union{Integer,AbstractFloat,ComplexF128,ComplexF32}
 
-
+include("./ArrayFormats/ArrayFormats.jl")
+using .ArrayFormats
 
 include("./ImageFormats/ImageFormats.jl")
-using .ImageFormats
+#using .ImageFormats
 
 include("./NeuroIntents/NeuroIntents.jl")
 

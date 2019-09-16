@@ -1,47 +1,37 @@
 function save(f::Formatted{DataFormat{:NII}},
-              A::AbstractArray;
-              version::Int=1,
+              A::AbstractArray,
+              version::Int=1;
               copyprops::Bool=false
              )
 
     anew = nieltransform(A)
-    s = savestreaming(f, anew; version=version, copyprops=copyprops)
+    s = savestreaming(f, anew, version, copyprops=copyprops)
+    write(s, extension(s))
     write(s, anew)
     flush(stream(s))
     return nothing
 end
 
-function savestreaming(s::File{DataFormat{:NII}},
-                       A::AbstractArray;
-                       version::Int=1,
-                       copyprops::Bool=false
-                      )
-
-    return savestreaming(open(s, "w"), A, version=version, copyprops=copyprops)
+function savestreaming(s::File{DataFormat{:NII}}, A::AbstractArray, version::Int=1; copyprops::Bool=false)
+    return savestreaming(open(s, "w"), A, version, copyprops=copyprops)
 end
 
-function savestreaming(s::Stream{DataFormat{:NII}},
-                       A::AbstractArray;
-                       version::Int=1,
-                       copyprops::Bool=false
-                      )
-
-    return savestreaming(ImageStream(s, A, copyprops=copyprops), version=version)
+function savestreaming(s::Stream{DataFormat{:NII}}, A::AbstractArray, version::Int=1; copyprops::Bool=false)
+    return savestreaming(s, ArrayInfo(A, copyprops), version)
 end
 
-function savestreaming(s::ImageStream; version::Int=1)
-    savemeta(s, version=version)
-    return s
-end
-
-function savemeta(s::ImageStream; version::Int=1)
-    if version == 1
-        writehdr1(s)
+function savestreaming(s::Stream{DataFormat{:NII},IOType}, info::ArrayInfo, version::Int=1) where IOType
+    if file_extension(s) == ".gz"
+        ret = ArrayStream(gzdopen(stream(s)), info)
     else
-        writehdr2(s)
+        ret = ArrayStream(stream(s), info)
     end
-    write(s, extension(s))
-    return s
+    if version == 1
+        writehdr1(ret)
+    else
+        writehdr2(ret)
+    end
+    return ret
 end
 
 
@@ -51,7 +41,7 @@ function nieltransform(A::AbstractArray{T}) where T
     error("NIfTI.jl current doesn't support writing arrays of eltype $T.")
 end
 
-function writehdr1(s::ImageStream{T}) where T
+function writehdr1(s::ArrayStream{T}) where T
                                                               # offset - C name :: Type
                                                               # -----------------------
 
@@ -108,16 +98,16 @@ function writehdr1(s::ImageStream{T}) where T
     write(s, Float32(qx))                               # qoffset_x::Float32
     write(s, Float32(qy))                               # qoffset_y::Float32
     write(s, Float32(qz))                               # qoffset_z::Float32
-    write(s, convert(Array{Float32}, sf[1,1:4]))       # 280 - srows
-    write(s, convert(Array{Float32}, sf[2,1:4]))       # 296 - srows
-    write(s, convert(Array{Float32}, sf[3,1:4]))       # 312 - srows
+    write(s, convert(Array{Float32}, sf[1,1:4]))        # 280 - srows
+    write(s, convert(Array{Float32}, sf[2,1:4]))        # 296 - srows
+    write(s, convert(Array{Float32}, sf[3,1:4]))        # 312 - srows
     write(s, codeunits(intentname(s)))                    # 328 - intent_name::NTuple{16,UInt8}
     write(s, [NP1_MAGIC...])                              # 344 - magic::NTuple{4,UInt8}
 
     return nothing
 end
 
-function writehdr2(s::ImageStream{T}) where T
+function writehdr2(s::ArrayStream{T}) where T
     sf = sform(s)
     a, qb, qc, qd, qx, qy, qz, xd, yd, zd, qfac = getquatern(s)
 

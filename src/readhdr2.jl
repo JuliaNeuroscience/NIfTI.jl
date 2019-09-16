@@ -1,6 +1,6 @@
 function readhdr2(s::IO, p::AbstractDict)
 #    p["header"] = ImageProperties{:header}()
-    magicbytes!(p, (read(s, 8)...,))
+    magicbytes!(p, read(s, 8))
     T = get(NiftiDatatypes, read(s, Int16), UInt8)
     skip(s, 2)  # skip bitpix
 
@@ -31,60 +31,40 @@ function readhdr2(s::IO, p::AbstractDict)
     sformcode!(p, xform(read(s, Int32)))
     if qformcode(p) == UnkownSpace
         skip(s, 12)  # skip quaternion b/c space is unkown
-        qform!(p, MMatrix{4,4,Float64,16}([pixdim[2] 0         0          0 0
-                                                     0 pixdim[3]          0 0
-                                                     0         0  pixdim[4] 0
-                                                     0         0          0 1]))
-        qx = Float64(read(s, Float64))
-        qy = Float64(read(s, Float64))
-        qz = Float64(read(s, Float64))
+        qx = read(s, Float64)
+        qy = read(s, Float64)
+        qz = read(s, Float64)
+        qform!(p, quat2mat(zero(Float64), zero(Float64), zero(Float64),
+                           zero(Float64), zero(Float64), zero(Float64),
+                           dx, dy, dz, zero(Float64)))
     else
-        b = Float64(read(s, Float64))
-        c = Float64(read(s, Float64))
-        d = Float64(read(s, Float64))
-        qx = Float64(read(s, Float64))
-        qy = Float64(read(s, Float64))
-        qz = Float64(read(s, Float64))
-        a = 1 - (b*b + c*c + d*d)
-        if a < 1.e-7                   # special case
-            a = 1 / sqrt(b*b+c*c+d*d)
-            b *= a
-            c *= a
-            d *= a                   # normalize (b,c,d) vector
-            a = zero(Float64)        # a = 0 ==> 180 degree rotation
-        else
-            a = sqrt(a)              # angle = 2*arccos(a)
-        end
-        # make sure are positive
-        xd = pixdim[1] > 0 ? pixdim[1] : one(Float64)
-        yd = pixdim[2] > 0 ? pixdim[2] : one(Float64)
-        zd = pixdim[3] > 0 ? pixdim[3] : one(Float64)
-        zd = qfac < 0 ? -zd : zd
-        qform!(p, MMatrix{4,4,Float64}([[((a*a+b*b-c*c-d*d)*xd),       (2*(b*c-a*d)*yd),       (2*(b*d+a*c)*zd),   qx]'
-                                        [     (2*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),       (2*(c*d-a*b)*zd),   qy]'
-                                        [      (2*(b*d-a*c)*xd),       (2*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd),   qz]'
-                                        [                     0,                      0,                      0, qfac]']))
+        quaternb!(p, read(s, Float64))
+        quaternc!(p, read(s, Float64))
+        quaternd!(p, read(s, Float64))
+        qx = read(s, Float64)
+        qy = read(s, Float64)
+        qz = read(s, Float64)
+
+        qform!(p, quat2mat(quaternb(p), quaternc(p), quaternd(p),
+                           qx, qy, qz, dx, dy, dz, qfac))
+
         if sformcode(p) == UnkownSpace
             skip(s, 48)
-            p["spacedirections"] = (Tuple(qform(p)[1,1:3]), Tuple(qform(p)[1,1:3]), Tuple(qform(p)[3,1:3]))
-            dimnames = orientation(qform(p))
+            p["spacedirections"] = (Tuple(qform(p)[1,1:3]), Tuple(qform(p)[2,1:3]), Tuple(qform(p)[3,1:3]))
         else
             sform!(p, MMatrix{4,4,Float64}(vcat(read!(s, Matrix{Float64}(undef, (1,4))),
                                                 read!(s, Matrix{Float64}(undef, (1,4))),
                                                 read!(s, Matrix{Float64}(undef, (1,4))),
                                                 Float64[0, 0, 0, 1]')))
-            p["spacedirections"] = (Tuple(sform(p)[1,1:3]), Tuple(sform(p)[1,1:3]), Tuple(sform(p)[3,1:3]))
-            dimnames = orientation(sform(p))
+            p["spacedirections"] = (Tuple(sform(p)[1,1:3]), Tuple(sform(p)[2,1:3]), Tuple(sform(p)[3,1:3]))
         end
     end
- 
-
-
+    dimnames = orientation(affinematrix(p))
     slicecode!(p, numeric2slicecode(read(s, Int32)))
 
     xyzt_units = read(s, Int32)
     sp_units = get(NiftiUnits, xyzt_units & 0x07, 1)
-    p["header"]["intent"] = get(NiftiIntents, read(s, Int32), NoIntent)
+    intent!(p, num2intent(read(s, Int32)))
 
     intentname!(p, String(read(s, 16)))
     d = read(s, Int8)
@@ -110,8 +90,6 @@ function readhdr2(s::IO, p::AbstractDict)
         dimnames = (dimnames..., intentdimnames(intent, N)...)
         axs = (axs..., map(i->range(one(Float64), step=pixdim[i], lenght=sz[i]), 5:N)...)
     end
-
-    extension!(p, read(s, p, NiftiExtension))
 
     return ArrayInfo{T}(NamedTuple{dimnames}(axs), p)
 end

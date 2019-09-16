@@ -16,7 +16,6 @@ function num2intent(i::Integer)
 end
 
 #intent(img::ImageMeta{T,N,A,ImageProperties{:NII}}) where {T,N,A} = intent(properties(img))
-intent(s::ImageStream) = intent(properties(s))
 
 #intent(p::ImageProperties) = intent(header(p))
 #intent(p::ImageProperties{:header}) = @get p "intent" NoIntent
@@ -106,7 +105,11 @@ function guessintent(ext::AbstractVector{<:AbstractString}, ::Type{A}) where {A<
             return GiftiVector
         elseif ext[end] == "gii"
             return GIfTI
+        else
+            return A
         end
+    else
+        return A
     end
 end
 

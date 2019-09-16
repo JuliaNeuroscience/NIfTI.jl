@@ -36,9 +36,21 @@ MNI152 space
 const MNI152Space = CoordinateSpace{:MNI152}()
 
 """
-    orientationspace(x)
+    coordinatespace(x)
+
+Return the coordinate space that `x` is in.
+"""
+function coordinatespace(x::Any)
+    getter(x, "coordinatespace", CoordinateSpace, UnkownSpace)
+end
 
 """
-orientationspace(x::T) where {T} = orientationspace(HasProperties(T), x)
-orientationspace(::HasProperties{true}, x) = orientationspace(properties(x))
-orientationspace(::HasProperties{false}, x) = UnkownSpace
+    coordinatespace!(x, val)
+
+Set the coordinate space for `x` to `val`.
+"""
+function coordinatespace!(x::Any, val::CoordinateSpace)
+    setter!(x, "coordinatespace", val, CoordinateSpace)
+end
+
+

@@ -1,60 +1,3 @@
-"""
-    dataoffset(x) -> Int
-
-Returns the IO stream offset to data given an type instance. Defaults to 0.
-"""
-dataoffset(x::Any) = getter(x, "dataoffset", Int, 1)
-
-"""
-    dataoffset!(x, val)
-
-Set the the `data_offset` property.
-"""
-dataoffset!(x::Any, i::Integer) = setter!(x, "dataoffset", i, Int)
-
-"""
-
-    auxfiles(x) -> Vector{String}
-
-Retrieves string for auxiliary file associated with the image.
-"""
-auxfiles(x::Any) = getter(x, "auxfiles", Vector{String}, [""])
-
-"""
-    auxfiles!(x, val)
-
-Sets the `auxfiles` property. `val` should be a `String` or `Vector{String}`.
-"""
-auxfiles!(x::Any, i::Vector{String}) = setter!(x, "auxfiles", i, Vector{String})
-
-"""
-    srcfile(x) -> String
-
-Retrieves the file name that the image comes from.
-"""
-srcfile(x::Any) = getter(x, "srcfile", String, "")
-
-"""
-    srcfile!(x, f::String)
-
-Change `srcfile` property.
-"""
-srcfile!(x::Any, val::AbstractString) = setter!(x, "srcfile", val, String)
-
-"""
-    description(x) -> String
-
-Retrieves description field that may say whatever you like.
-"""
-description(x::Any) = getter(x, "description", String, "")
-
-"""
-    description!(x, descrip::String)
-
-Change description defined in an properties type.
-"""
-description!(x::Any, val::AbstractString) = setter!(x, "description", val, String)
-
 
 """
     freqdim(x) -> Int
@@ -97,7 +40,7 @@ phasedim(x::Any) = getter(x, "phasedim", Int, 0)
 
 Set the slice dimension of `x` to `val`.
 """
-phasedim!(x::Any, i::Integer) = setter!(x, "phaseedim", i, Int)
+phasedim!(x::Any, i::Integer) = setter!(x, "phasedim", i, Int)
 
 """
     slicestart(x) -> Int
@@ -255,28 +198,27 @@ sform!(x::Any, val::AbstractMatrix) = setter!(x, "sform", val, MMatrix{4,4,Float
 function default_affinemat(x::Any)
     if sformcode(x) === UnkownSpace
         if qformcode(x) === UnkownSpace
-            return _default_affinemat(pixelspacing(x))
+            return _default_affinemat(x)
         else
             return qform(x)
         end
     else
         return sform(x)
     end
-    default_affinemat(x)
 end
 
 function _default_affinemat(x::Any) where {N}
     _default_affinemat(spacedirections(x), pixelspacing(x))
 end
 
-function _default_affinemat(sd::NTuple{2,NTuple{2,T}}, ps::NTuple{2,T}) where T<:AbstractFloat
+function _default_affinemat(sd::NTuple{2,NTuple{2,T}}, ps::NTuple{2,T}) where T
     MMatrix{4,4,Float64,16}(sd[1][1], sd[2][1], 0, 0,
                             sd[1][2], sd[2][2], 0, 0,
                                    0,        0, 0, 0,
                                ps[1],    ps[2], 0, 0)
 end
 
-function _default_affinemat(sd::NTuple{3,NTuple{3,T}}, ps::NTuple{3,T}) where T<:AbstractFloat
+function _default_affinemat(sd::NTuple{3,NTuple{3,T}}, ps::NTuple{3,T}) where T
     MMatrix{4,4,Float64,16}(sd[1][1], sd[2][1], sd[3][1], 0,
                             sd[1][2], sd[2][2], sd[3][2], 0,
                             sd[1][3], sd[2][3], sd[3][3], 0,

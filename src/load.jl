@@ -10,10 +10,11 @@
 """
 function load(
     f::Formatted{format"NII"},
-    ::Type{A}=Array,
+    ::Type{A}=Array;
     mode::String="r",
     mmap::Bool=false,
-    grow::Bool=true) where {A<: AbstractArray}
+    grow::Bool=true
+   ) where {A<: AbstractArray}
     read(loadstreaming(f, guessintent(split(filename(f), '.'), A), mode); mmap=mmap, grow=grow)
 end
 
@@ -21,38 +22,38 @@ end
 """
     loadstreaming(::DataFormat{:NII}, args...)
 """
-function loadstreaming(s::File{DataFormat{:NII}}, ::Type{A}, mode::String="r") where {A<:AbstractArray}
-    loadstreaming(open(s, mode))
+function loadstreaming(s::File{DataFormat{:NII}}, ::Type{A}=Array, mode::String="r") where {A<:AbstractArray}
+    loadstreaming(open(s, mode), A, mode)
 end
 
-function loadstreaming(s::Stream{DataFormat{:NII},GZip.GZipStream})
+function loadstreaming(s::Stream{DataFormat{:NII},GZip.GZipStream}, ::Type{A}=Array, mode::String="r") where {A<:AbstractArray}
     m = loadmeta(s)
     if magicbytes(m) == NI1_MAGIC || magicbytes(m) == NI2_MAGIC
-        ret = ImageStream(gzdopen(open(getimg(filename(s)))), m)
+        ret = ArrayStream(gzdopen(open(getimg(filename(s)))), m)
         close(s)
     else
-        ret = ImageStream(stream(s), m)
+        ret = ArrayStream(stream(s), m)
     end
     return ret
 end
 
-function loadstreaming(s::Stream{DataFormat{:NII},IOType}) where IOType
+function loadstreaming(s::Stream{DataFormat{:NII},IOType}, ::Type{A}=Array, mode::String="r") where {A<:AbstractArray,IOType}
     if file_extension(s) == ".gz"
-        return loadstreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
+        return loadstreaming(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)), A, mode)
     else
         m = loadmeta(s)
         if magicbytes(m) == NI1_MAGIC || magicbytes(m) == NI2_MAGIC
             close(s)
-            return ImageStream(open(getimg(filename(s))), m)
+            return ArrayStream(open(getimg(filename(s))), m)
         else
-            return ImageStream(stream(s), m)
+            return ArrayStream(stream(s), m)
         end
     end
 end
 
 
 """
-    metadata(::DataFormat{:NII}) -> ImageInfo
+    metadata(::DataFormat{:NII}) -> ArrayInfo
 """
 function metadata(s::File{DataFormat{:NII}})
     open(s) do s
@@ -61,7 +62,7 @@ function metadata(s::File{DataFormat{:NII}})
 end
 
 function metadata(s::Stream{DataFormat{:NII},IOType}) where IOType
-    if split(filname(s), '.')[end] == ".gz"
+    if split(filename(s), '.')[end] == ".gz"
         return loadmeta(Stream(DataFormat{:NII}, gzdopen(stream(s)), filename(s)))
     else
         return loadmeta(s)
@@ -73,6 +74,7 @@ metadata(s::Stream{DataFormat{:NII},GZip.GZipStream}) = loadmeta(s)
 function loadmeta(s::Stream{DataFormat{:NII}})
     m = loadmeta(stream(s))
     srcfile!(m, filename(s))
+    extension!(m, read(s, NiftiExtension, dataoffset(m)))
     return m
 end
 

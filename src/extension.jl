@@ -88,7 +88,7 @@ extension(x::Any) = getter(x, "extension", Vector{NiftiExtension}, NiftiExtensio
 extension!(x::Any, val::Vector{NiftiExtension}) = setter!(x, "extension", val, Vector{NiftiExtension})
 
 
-function read(io::IO, p::AbstractDict, ::Type{NiftiExtension})
+function read(io::IO, ::Type{NiftiExtension}, n::Int)
     ret = NiftiExtension[]
     if eof(io)
         return ret
@@ -98,7 +98,7 @@ function read(io::IO, p::AbstractDict, ::Type{NiftiExtension})
             return ret
         else
             counter = position(io)
-            while counter < (data_offset(p)-1)
+            while counter < (n-1)
                 esize = read(io, Int32)
                 ec = read(io, Int32)
                 push!(ret, NiftiExtension(ecode(ec), read!(io, Array{UInt8}(undef, esize-8))))

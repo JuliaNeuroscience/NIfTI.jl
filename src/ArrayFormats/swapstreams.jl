@@ -1,6 +1,3 @@
-using MappedArrays
-import Base: read, read!, write
-
 export SwapStream, stream
 
 const LittleEndian = 0x01020304

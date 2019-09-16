@@ -1,14 +1,15 @@
 # TODO: these are things that should probably be in ImageCore but I need now
 # TODO: ensure index properties on these (unique indexes etc.)
 
+
 const NamedAxes{Names,N} = NamedTuple{Names,Tuple{Vararg{<:AbstractVector,N}}}
 
 const NamedAxis{Name,Ax<:AbstractVector} = NamedTuple{Name,Tuple{Ax}}
 
 NamedAxis{Name}(x::AbstractVector) where {Name} = NamedTuple{(Name,)}((x,))
 
-#namedaxes(x::NamedTuple{(),Tuple{}}, i::Int) = throw(BoundsError(x, i))
-function namedaxes(x::NamedAxes{Sym,N}, i::Int) where {Sym,N}
+ImageCore.namedaxes(x::NamedTuple{(),Tuple{}}, i::Int) = throw(BoundsError(x, i))
+function ImageCore.namedaxes(x::NamedAxes{Sym,N}, i::Int) where {Sym,N}
     @boundscheck if 1 > 1 > N
         error(BoundsError(x, i))
     end
@@ -16,11 +17,9 @@ function namedaxes(x::NamedAxes{Sym,N}, i::Int) where {Sym,N}
 end
 
 """
-    firstaxis(::NamedAxes) -> NamedAxis
+    firstaxis(x) -> NamedAxis
 """
-firstaxis(x::NamedAxes{Sym,N}) where {Sym,N} = NamedTuple{(first(Sym),)}((first(x),))
-firstaxis(x::NamedAxis) = x
-firstaxis(x::NamedTuple{(),Tuple{}}) = ArgumentError("$x is empty and has no first axis.")
+firstaxis(x::NamedTuple) = NamedTuple{(first(keys(x)),)}((first(x),))
 
 """
     filteraxes(f, x) -> Tuple{Vararg{AbstractVector}}
@@ -37,23 +36,22 @@ filteraxes(f::F, x) where {F} = mapfilteraxes(f, first, namedaxes(x))
 `f` is a function that determines whether to use a given axis from `x` and `mf`
 is a function that acts on select axes to return some new value.
 """
-mapfilteraxes(f::F, m::M, x::Any) where {F,M} = _mapfilteraxes(f, mf, namedaxes(x))
-_filteraxes(f::F, m::M, x::NamedAxes) where {F,M} = _filteraxis(f, m, firstaxis(x), tail(x))
-@inline function _mapfilteraxis(f::F, m::M, fa::NamedAxis, x::NamedAxes) where {F,M}
+mapfilteraxes(f::F, m::M, x::Any) where {F,M} = _mapfilteraxes(f, m, namedaxes(x))
+_mapfilteraxes(f::F, m::M, x::NamedTuple) where {F,M} = _mapfilteraxes(f, m, firstaxis(x), tail(x))
+@inline function _mapfilteraxes(f::F, m::M, fa::NamedAxis, x::NamedTuple{Sym}) where {F,M,Sym}
     if f(fa)
-        (m(fa), _mapfilteraxes(f, x)...)
+        (m(fa), _mapfilteraxes(f, m, firstaxis(x), tail(x))...)
     else
-        _mapfilteraxes(f, x)
+        _mapfilteraxes(f, m, x)
     end
 end
-@inline function _filteraxes(f::F, m::M, x::NamedAxis) where {F,M}
-    if f(x)
-        (m(x),)
+@inline function _mapfilteraxes(f::F, m::M, fa::NamedAxis, x::NamedTuple{(),Tuple{}}) where {F,M}
+    if f(fa)
+        return (m(fa),)
     else
-        ()
+        return ()
     end
 end
-
 
 
 """
@@ -79,21 +77,28 @@ end
     end
 end
 
+"""
+    istimeaxis(ax) -> Bool
+
+Test whether the axis `ax` corresponds to time.
+"""
+istimeaxis(::Type{<:NamedTuple{(:time,)}}) = true
+istimeaxis(::Type{<:NamedTuple{Name}}) where {Name} = false
+
 
 """
-    isspatial(::NamedAxis) -> Bool
+    isspatialaxis(::NamedAxis) -> Bool
 
 Determines whether a given axis refers to a spatial dimension. Default is true.
 """
-isspatial(::NamedAxis{Name}) where {Name} = true
+isspatialaxis(::T) where {T} = isspatialaxis(T)
+isspatialaxis(::Type{<:NamedAxis{Name}}) where {Name} = true
+isspatialaxis(::Type{<:NamedAxis{(:time,)}}) = false
+isspatialaxis(::Type{<:NamedAxis{(:color,)}}) = false
 
-isspatial(::NamedAxis{(:time,)}) = false
+ImageCore.coords_spatial(a::ArrayInfo) = filterdims(isspatialaxis, a)
 
-isspatial(::NamedAxis{(:color,)}) = false
-
-ImageCore.coords_spatial(a::ArrayInfo) = filterdims(isspatial, a)
-
-ImageCore.size_spatial(a::ArrayInfo) = mapfilteraxes(isspatial, i -> length(first(i)), a)
+ImageCore.size_spatial(a::ArrayInfo) = mapfilteraxes(isspatialaxis, i -> length(first(i)), a)
 
 """
     spatialoffset(img)
@@ -103,34 +108,15 @@ Provides the offset of each dimension (i.e., where each spatial axis starts).
 spatialoffset(x) = first.(axes(x))
 
 """
-    spatunits(img)
+    spatialunits(img)
 
 Returns the units (i.e. Unitful.unit) that each spatial axis is measured in. If not
 available `nothing` is returned for each spatial axis.
 """
-spatunits(x) = mapfilteraxes(isspatial, i->unit(eltype(first(i))), x)
+spatialunits(x::Any) = mapfilteraxes(isspatialaxis, i->unit(eltype(first(i))), x)
 
+spatialunits(x::ImageMeta) = map(i->unit(eltype(i)), pixelspacing(x))
 
-ImageCore.sdims(img::ArrayInfo) = length(coords_spatial(img))
-
-ImageCore.pixelspacing(a::ArrayInfo) = mapfilteraxes(isspatial, step, namedaxes(a))
-
-
-#@property("spacedirection", axestype, indices_spatial)
-ImageCore.spacedirections(a::ArrayInfo) = _spacedirections(a, properties(a))
-function _spacedirections(a::ArrayInfo, p::AbstractDict)
-    out = get(p, "spacedirections", PropertyMissing())
-    if out isa PropertyMissing
-        return indices_spatial(a)
-    else
-        return out
-    end
-end
-
-## Time dimension
-timedim(x::ArrayInfo) = finddim(x, :time)
-
-timeaxis(x::ArrayInfo) = findaxis(x, :time)
 
 """
     timefirst(x)
@@ -145,9 +131,8 @@ timefirst(x::Any) = first(timeaxis(x))
 Returns the units (i.e. Unitful.unit) the time axis is measured in. If not available
 `nothing` is returned.
 """
-timeunits(x::Any) = unit(timeaxis(x))
+timeunits(x::Any) = unit(eltype(timeaxis(x)))
 
-ImageAxes.nimages(img::ArrayInfo) = length(timeaxis(img))
 
 
 

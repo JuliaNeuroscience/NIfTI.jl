@@ -53,13 +53,21 @@ Base.size(img::ArrayInfo, i::Integer) = length(axes(img, i))
 Base.length(img::ArrayInfo) = prod(size(img))
 
 # ImageMetadata interface
-ImageMetadata.copyproperties(img::ArrayInfo) = copyproperties(properties(s))
+ImageMetadata.copyproperties(a::ArrayInfo) = copyproperties(properties(a))
 
-function ImageAxes.colordim(x::ArrayInfo)
-    d = ImageAxes._colordim(1, axes(x))
-    d > ndims(s) ? 0 : d
+ImageCore.pixelspacing(a::ArrayInfo) = step.(axes(a))
+
+ImageCore.sdims(img::ArrayInfo) = length(coords_spatial(img))
+function ImageCore.spacedirections(img::ArrayInfo)
+    _spacedirections(img, get(properties(img), "spacedirections", MProperty))
+end
+_spacedirections(img::ArrayInfo, val::MissingProperty) = __spacedirections(pixelspacing(img))
+_spacedirections(img::ArrayInfo, val::Any) = val
+
+function __spacedirections(ps::NTuple{N,Any}) where N
+    ntuple(i->ntuple(d->d==i ? ps[d] : zero(ps[d]), Val(N)), Val(N))
 end
 
-function ImageAxes.assert_timedim_last(s::ArrayInfo)
-    istimeaxis(axes(s)[end]) || error("time dimension is not last")
-end
+ImageCore.nimages(img::ArrayInfo) = length(timeaxis(img))
+
+

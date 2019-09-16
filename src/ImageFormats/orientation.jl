@@ -1,41 +1,3 @@
-# translation component of AffineMap
-gettranslation(img::Union{AbstractArray,ImageStream,ArrayInfo}) =
-    SVector(ustrip.(first.(axisvalues(img)[1:sdims(img)])))
-
-# quaternion of spacedirections
-getquat(img::Union{AbstractArray,ImageStream,ArrayInfo}) = _getquat(getlinear(img))
-
-function _getquat(sd::SMatrix{2,2,T}) where T<:AbstractFloat
-    _getquat(SMatrix{3,3,T}(sd[1:2, 1]..., zero(T),
-                            sd[1:2, 2]..., zero(T),
-                            zero(T),  zero(T),  one(T)))
-end
-
-_getquat(sd::StaticMatrix{3,3,T}) where T<:AbstractFloat = Quat(sd)
-
-_getquat(sd::NTuple{N,NTuple{N,T}}) where {N,T} = _getquat(map(i->float.(i), sd))
-
-getaffinemat(img::Union{AbstractArray,ImageStream,ArrayInfo}) =
-    _getaffinemat(getlinear(img), gettranslation(img))
-
-@inbounds function _getaffinemat(sd::NTuple{2,NTuple{2,T}}, t::NTuple{2,T}) where T<:Union{Float64,Float32}
-    __getaffinemat(MMatrix{4,4,T,14}(sd[1][1], sd[2][1], sd[3][1], zero(T),
-                                     sd[1][2], sd[2][2], sd[3][2], zero(T),
-                                     zero(T),  zero(T),  zero(T), zero(T),
-                                        t[1],     t[2],  zero(T), zero(T)))
-end
-
-@inbounds function _getaffinemat(sd::NTuple{3,NTuple{3,T}}, t::NTuple{3,T}) where T<:Union{Float64,Float32}
-    __getaffinemat(MMatrix{4,4,T,14}(sd[1][1], sd[2][1], sd[3][1], zero(T),
-                                     sd[1][2], sd[2][2], sd[3][2], zero(T),
-                                     sd[1][3], sd[2][3], sd[3][3], zero(T),
-                                         t[1],     t[2],     t[3], zero(T)))
-end
-
-@inbounds function __getaffinemat(x::MMatrix{4,4,T,16}) where T<:Union{Float64,Float32}
-    setindex!(x, sign(det(view(x, 1:3, 1:3))), 4, 4)
-end
-
 @inline function orientation(R::StaticMatrix{4,4,T}) where T<:Union{Float64,Float32}
     # load column vectors for each (i,j,k) direction from matrix
     xi = R[1,1]
@@ -248,6 +210,16 @@ function _getquatern(qb::T, qc::T, qd::T,
 end
 
 
+function mat2quat(x::Any)
+    mat2quat(affinematrix(x),
+             quaternb(x),
+             quaternc(x),
+             quaternd(x),
+             Float64.(ustrip.(pixelspaceing(x)...)),
+             Float64.(spatialoffset(x))...,
+            )
+end
+
 function mat2quat(R::StaticMatrix{4,4,T};
                   qb::Union{T,Nothing}=nothing,
                   qc::Union{T,Nothing}=nothing,
@@ -383,7 +355,10 @@ function mat2quat(R::StaticMatrix{4,4,T};
            xd, yd, zd, qfac
 end
 
-function quat2mat(qb::T, qc::T, qd::T, qx::T, qy::T, qz::T, dx::T, dy::T, dz::T, qfac::T) where T<:Union{Float64,Float32}
+@inbounds function quat2mat(qb::T, qc::T, qd::T, qx::T, qy::T, qz::T, dx::T, dy::T, dz::T, qfac::T) where T<:Float64
+    R = MMatrix{4,4,Float64,16}(zeros(Float64, 16))
+    R[4,4] = 1
+
     a = qb
     b = qb
     c = qc
@@ -410,8 +385,18 @@ function quat2mat(qb::T, qc::T, qd::T, qx::T, qy::T, qz::T, dx::T, dy::T, dz::T,
         zd = -zd  # left handedness?
     end
 
-    SMatrix{4,4,T}([T[((a*a+b*b-c*c-d*d)*xd),       (2*(b*c-a*d)*yd),       (2*(b*d+a*c)*zd),   qx]'
-                    T[     (2*(b*c+a*d )*xd), ((a*a+c*c-b*b-d*d)*yd),       (2*(c*d-a*b)*zd),   qy]'
-                    T[      (2*(b*d-a*c)*xd),       (2*(c*d+a*b)*yd), ((a*a+d*d-c*c-b*b)*zd),   qz]'
-                    T[                     0,                      0,                      0, qfac]'])
+    R[1, 1] = (a*a+b*b-c*c-d*d) * xd
+    R[1, 2] = (2*(b*c-a*d)*yd)
+    R[1, 3] = (2*(b*d+a*c)*zd)
+    R[1, 4] = qx
+    R[2, 1] = (2*(b*c+a*d )*xd)
+    R[2, 2] = ((a*a+c*c-b*b-d*d)*yd)
+    R[2, 3] = (2*(c*d-a*b)*zd)
+    R[2, 4] = qy
+    R[3, 1] = (2*(b*d-a*c)*xd)
+    R[3, 2] = (2*(c*d+a*b)*yd)
+    R[3, 3] = ((a*a+d*d-c*c-b*b)*zd)
+    R[3, 4] = qz
+
+    return R
 end
