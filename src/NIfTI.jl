@@ -491,7 +491,7 @@ function niread(file::AbstractString; mmap::Bool=false)
             seek(header_io, Int(header.vox_offset))
             volume = read!(header_io, Array{dtype}(undef, dims))
             if !eof(header_io)
-                warn("file size does not match length of data; some data may be ignored")
+                @warn("file size does not match length of data; some data may be ignored")
             end
             close(header_io)
             !header_gzipped || close(file_io)
