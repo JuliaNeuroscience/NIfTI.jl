@@ -1,6 +1,5 @@
 name = "NIfTI"
 uuid = "f897abbf-c5d9-45cb-bf89-9f7f579a29ec"
-authors = ["Petr Krysl <pkrysl@ucsd.edu>"]
 version = "0.1.0"
 
 [deps]
