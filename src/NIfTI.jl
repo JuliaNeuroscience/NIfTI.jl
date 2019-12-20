@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using GZip, Mmap
+using GZip, Mmap, MappedArrays
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
@@ -530,7 +530,7 @@ function niread(file::AbstractString; mmap::Bool=false)
         end
     end
     if swapped && sizeof(eltype(volume)) > 1
-        volume = mappedarray((ntoh, hton), volume)
+        volume = mappedarray(ntoh, hton, volume)
     end
 
     return NIVolume(header, extensions, volume)
