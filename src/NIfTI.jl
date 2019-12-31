@@ -464,8 +464,8 @@ end
 """
 
 """
-function niread(file::AbstractString; mmap::Bool=false)
-    file_io = open(file, "r")
+function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
+    file_io = open(file, mode)
     header_gzipped = isgz(file_io)
     header_io = header_gzipped ? gzdopen(file_io) : file_io
     header, swapped = read_header(header_io)
@@ -509,7 +509,7 @@ function niread(file::AbstractString; mmap::Bool=false)
             end
         end
 
-        volume_io = open(volume_name, "r")
+        volume_io = open(volume_name, mode)
         volume_gzipped = isgz(volume_io)
         if mmap
             if volume_gzipped
