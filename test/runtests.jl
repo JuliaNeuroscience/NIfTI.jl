@@ -48,6 +48,16 @@ vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
 
+# Write and read DT_BINARY
+const BOOL_WRITE = "$(tempname()).nii"
+const BIT_WRITE = "$(tempname()).nii"
+mask = rand(Bool, 3, 5, 7) # Array{Bool}
+mask_bitarray = BitArray(mask) # BitArray
+niwrite(BOOL_WRITE, NIVolume(mask))
+niwrite(BIT_WRITE, NIVolume(mask_bitarray))
+@test niread(BOOL_WRITE).raw == mask
+@test niread(BIT_WRITE).raw == mask_bitarray
+
 # Open mmaped file for reading and writing
 const WRITE = "$(tempname()).nii"
 const VERIFY_WRITE = "$(tempname()).nii"
@@ -73,4 +83,6 @@ rm(IMG)
 rm(TEMP_FILE)
 rm(WRITE)
 rm(VERIFY_WRITE)
+rm(BOOL_WRITE)
+rm(BIT_WRITE)
 # rm(BE)
