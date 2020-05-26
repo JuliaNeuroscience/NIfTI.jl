@@ -1,5 +1,5 @@
 name = "NIfTI"
-uuid = "f897abbf-c5d9-45cb-bf89-9f7f579a29ec"
+uuid = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
 version = "0.4.1"
 
 [deps]
