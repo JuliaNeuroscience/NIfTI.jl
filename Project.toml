@@ -12,3 +12,9 @@ Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 GZip = "0.5"
 MappedArrays = "0.2"
 
+[extras]
+GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["GZip", "Test"]
