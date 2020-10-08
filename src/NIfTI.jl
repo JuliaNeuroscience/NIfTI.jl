@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using GZip, Mmap, MappedArrays
+using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
@@ -416,9 +416,11 @@ end
 # Convenience function to write a NIfTI file given a path
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
-        iogz = gzopen(path, "w9")
-        write(iogz, vol)
-        close(iogz)
+        io = open(path, "w9")
+        stream = GzipCompressorStream(io)
+        write(stream, vol)
+        close(stream)
+        close(io)
     else
         io = open(path, "w")
         write(io, vol)
@@ -477,7 +479,7 @@ end
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     file_io = open(file, mode)
     header_gzipped = isgz(file_io)
-    header_io = header_gzipped ? gzdopen(file_io) : file_io
+    header_io = header_gzipped ? GzipDecompressorStream(file_io) : file_io
     header, swapped = read_header(header_io)
     extensions = read_extensions(header_io, header)
     dims = convert(Tuple{Vararg{Int}}, header.dim[2:header.dim[1]+1])
@@ -504,7 +506,8 @@ function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r"
                 volume = Mmap.mmap(header_io, ArrayType, dims, Int(header.vox_offset))
             end
         else
-            seek(header_io, Int(header.vox_offset))
+            seekstart(header_io)
+            read(header_io, Int(header.vox_offset))
             volume = read!(header_io, ArrayType(undef, dims))
             if !eof(header_io)
                 println("Warning! File size does not match length of data; some data may be ignored")
@@ -536,7 +539,7 @@ function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r"
             end
         else
             if volume_gzipped
-                volume_gz_io = gzdopen(volume_io)
+                volume_gz_io = GzipDecompressorStream(volume_io)
                 volume = read!(volume_gz_io, ArrayType(undef, dims))
                 close(volume_gz_io)
             else
