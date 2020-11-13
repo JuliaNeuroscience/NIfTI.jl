@@ -1,6 +1,6 @@
 name = "NIfTI"
 uuid = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
-version = "0.4.1"
+version = "0.5"
 
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -10,6 +10,7 @@ Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 
 [compat]
+CodecZlib = "0.7"
 MappedArrays = "0.2"
 julia = "1.3"
 
