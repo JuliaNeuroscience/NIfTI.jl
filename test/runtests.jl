@@ -2,11 +2,11 @@ using NIfTI, GZip
 using Test
 
 function extractto(gzname, out)
-	open(out, "w") do io
-		gzopen(gzname) do gz
-			write(io, read(gz))
-		end
-	end
+    open(out, "w") do io
+        gzopen(gzname) do gz
+          write(io, read(gz))
+        end
+    end
 end
 
 # single file storage
@@ -23,20 +23,20 @@ extractto(GZIPPED_HDR, HDR)
 extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
 for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
-	                  (GZIPPED_NII, false), (GZIPPED_HDR, false))
-	  file = niread(fname, mmap=mmap)
+                    (GZIPPED_NII, false), (GZIPPED_HDR, false))
+    file = niread(fname, mmap=mmap)
 
-	# Header
-	@test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
-  @test voxel_size(file.header) ≈ Float32[2.0, 2.0, 2.2]
-	@test size(file) == (128, 96, 24, 2)
+    # Header
+    @test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
+    @test voxel_size(file.header) ≈ Float32[2.0, 2.0, 2.2]
+    @test size(file) == (128, 96, 24, 2)
 
-	# Content
-	@test file.raw[65, 49, 13, :][:] == [265, 266]
-	@test vox(file, 64, 48, 12, :)[:] == [265, 266]
-	@test vox(file, 69, 56, 13, :)[:] == [502, 521]
+    # Content
+    @test file.raw[65, 49, 13, :][:] == [265, 266]
+    @test vox(file, 64, 48, 12, :)[:] == [265, 266]
+    @test vox(file, 69, 56, 13, :)[:] == [502, 521]
 
-	@assert maximum(file) == maximum(file.raw)
+    @assert maximum(file) == maximum(file.raw)
 end
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
@@ -86,3 +86,4 @@ rm(VERIFY_WRITE)
 rm(BOOL_WRITE)
 rm(BIT_WRITE)
 # rm(BE)
+
