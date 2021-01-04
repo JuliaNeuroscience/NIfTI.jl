@@ -34,7 +34,7 @@ d = vox(ni, x, y, z, t)       # Scaled by slope and intercept given in header, z
 d = ni[x, y, z, t]            # Scaled by slope and intercept given in header, one-based indexes
 d = ni.raw[x, y, z, t]        # Unscaled, one-based indexes
 ```
-Colons works everywhere, even with `vox`
+Colons works everywhere, even with `vox`, for voxel image processing
 
 To write a volume:
 ```julia
