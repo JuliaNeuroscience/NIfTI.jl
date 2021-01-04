@@ -3,7 +3,7 @@
 
 module NIfTI
 
-using GZip, Mmap
+using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
@@ -106,6 +106,7 @@ end
 const SIZEOF_HDR = Int32(348)
 
 const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
+    (Int16(1), Bool),
     (Int16(2), UInt8),
     (Int16(4), Int16),
     (Int16(8), Int32),
@@ -152,6 +153,10 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::Abstrac
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTI1Extension[], raw)
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{Bool,N}) where {N} =
+    NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
+NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
+    NIVolume{Bool,N,typeof(raw)}(header, NIfTI1Extension[], raw)
 
 # Conversion factors to mm/ms
 # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
@@ -207,13 +212,14 @@ end
 function nidatatype(t::Type)
     t = get(NIfTI_DT_BITSTYPES_REVERSE, t, nothing)
     if t == nothing
-        error("Unsupported data type $T")
+        error("Unsupported data type $t")
     end
     t
 end
 
 # Gets the size of a type in bits
 nibitpix(t::Type) = Int16(sizeof(t)*8)
+nibitpix(::Type{Bool}) = Int16(1)
 
 # Convert a NIfTI header to a 4x4 affine transformation matrix
 function getaffine(h::NIfTI1Header)
@@ -400,15 +406,21 @@ function write(io::IO, vol::NIVolume)
             write(io, zeros(UInt8, sz - length(ex.edata)))
         end
     end
-    write(io, vol.raw)
+    if eltype(vol.raw) == Bool
+        write(io, BitArray(vol.raw))
+    else
+        write(io, vol.raw)
+    end
 end
 
 # Convenience function to write a NIfTI file given a path
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
-        iogz = gzopen(path, "w9")
-        write(iogz, vol)
-        close(iogz)
+        io = open(path, "w9")
+        stream = GzipCompressorStream(io)
+        write(stream, vol)
+        close(stream)
+        close(io)
     else
         io = open(path, "w")
         write(io, vol)
@@ -464,10 +476,10 @@ end
 """
 
 """
-function niread(file::AbstractString; mmap::Bool=false)
-    file_io = open(file, "r")
+function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
+    file_io = open(file, mode)
     header_gzipped = isgz(file_io)
-    header_io = header_gzipped ? gzdopen(file_io) : file_io
+    header_io = header_gzipped ? GzipDecompressorStream(file_io) : file_io
     header, swapped = read_header(header_io)
     extensions = read_extensions(header_io, header)
     dims = convert(Tuple{Vararg{Int}}, header.dim[2:header.dim[1]+1])
@@ -477,6 +489,12 @@ function niread(file::AbstractString; mmap::Bool=false)
     end
     dtype = NIfTI_DT_BITSTYPES[header.datatype]
 
+    ArrayType = if dtype == Bool
+            BitArray{length(dims)}
+        else
+            Array{dtype, length(dims)}
+        end
+
     local volume
     if header.magic == NP1_MAGIC
         if mmap
@@ -485,13 +503,14 @@ function niread(file::AbstractString; mmap::Bool=false)
                 close(file_io)
                 error("cannot mmap a gzipped NIfTI file")
             else
-                volume = Mmap.mmap(header_io, Array{dtype,length(dims)}, dims, Int(header.vox_offset))
+                volume = Mmap.mmap(header_io, ArrayType, dims, Int(header.vox_offset))
             end
         else
-            seek(header_io, Int(header.vox_offset))
-            volume = read!(header_io, Array{dtype}(undef, dims))
+            seekstart(header_io)
+            read(header_io, Int(header.vox_offset))
+            volume = read!(header_io, ArrayType(undef, dims))
             if !eof(header_io)
-                warn("file size does not match length of data; some data may be ignored")
+                println("Warning! File size does not match length of data; some data may be ignored")
             end
             close(header_io)
             !header_gzipped || close(file_io)
@@ -509,28 +528,28 @@ function niread(file::AbstractString; mmap::Bool=false)
             end
         end
 
-        volume_io = open(volume_name, "r")
+        volume_io = open(volume_name, mode)
         volume_gzipped = isgz(volume_io)
         if mmap
             if volume_gzipped
                 close(volume_io)
                 error("cannot mmap a gzipped NIfTI file")
             else
-                volume = Mmap.mmap(volume_io, Array{dtype,length(dims)}, dims)
+                volume = Mmap.mmap(volume_io, ArrayType, dims)
             end
         else
             if volume_gzipped
-                volume_gz_io = gzdopen(volume_io)
-                volume = read!(volume_gz_io, Array{dtype}(undef, dims))
+                volume_gz_io = GzipDecompressorStream(volume_io)
+                volume = read!(volume_gz_io, ArrayType(undef, dims))
                 close(volume_gz_io)
             else
-                volume = read!(volume_io, Array{dtype}(undef, dims))
+                volume = read!(volume_io, ArrayType(undef, dims))
             end
             close(volume_io)
         end
     end
     if swapped && sizeof(eltype(volume)) > 1
-        volume = mappedarray((ntoh, hton), volume)
+        volume = mappedarray(ntoh, hton, volume)
     end
 
     return NIVolume(header, extensions, volume)
