@@ -416,7 +416,7 @@ end
 # Convenience function to write a NIfTI file given a path
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
-        io = open(path, "w9")
+        io = open(path, "w")
         stream = GzipCompressorStream(io)
         write(stream, vol)
         close(stream)
