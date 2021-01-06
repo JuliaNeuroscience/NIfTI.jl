@@ -1,10 +1,11 @@
-using NIfTI, GZip
+using NIfTI, CodecZlib, TranscodingStreams
 using Test
 
 function extractto(gzname, out)
-    open(out, "w") do io
-        gzopen(gzname) do gz
-          write(io, read(gz))
+    open(out, "w") do io_out
+        open(gzname, "r") do io_in
+            gz = GzipDecompressorStream(io_in)
+            write(io_out, read(gz))
         end
     end
 end
