@@ -49,6 +49,10 @@ vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
 
+const TEMP_GZIPPED_FILE = "$(tempname()).nii.gz"
+niwrite(TEMP_GZIPPED_FILE, vol)
+niread(TEMP_GZIPPED_FILE)
+
 # Write and read DT_BINARY
 const BOOL_WRITE = "$(tempname()).nii"
 const BIT_WRITE = "$(tempname()).nii"
