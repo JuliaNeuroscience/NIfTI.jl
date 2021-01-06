@@ -72,7 +72,7 @@ cp(WRITE, VERIFY_WRITE)
 # Big endian
 # const BE = "$(tempname()).nii"
 # download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
-img = niread("data/avg152T1_LR_nifti.nii.gz")
+img = niread(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
 @test size(img) == (91,109,91)
 
 GC.gc() # closes mmapped files
