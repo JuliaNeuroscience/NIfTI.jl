@@ -1,22 +1,25 @@
-using NIfTI, GZip
+using NIfTI, CodecZlib, TranscodingStreams
 using Test
 
 function extractto(gzname, out)
-    open(out, "w") do io
-        gzopen(gzname) do gz
-          write(io, read(gz))
+    open(out, "w") do io_out
+        open(gzname, "r") do io_in
+            gz = GzipDecompressorStream(io_in)
+            write(io_out, read(gz))
         end
     end
 end
 
+const TEMP_DIR_NAME = mktempdir()
+
 # single file storage
 const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")
-const NII = "$(tempname()).nii"
+const NII = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 extractto(GZIPPED_NII, NII)
 
 # dual file storage
 const GZIPPED_HDR = joinpath(dirname(@__FILE__), "data/example4d.hdr.gz")
-hdr_stem = tempname()
+hdr_stem = joinpath(TEMP_DIR_NAME, tempname())
 const HDR = "$hdr_stem.hdr"
 const IMG = "$hdr_stem.img"
 extractto(GZIPPED_HDR, HDR)
@@ -43,14 +46,18 @@ end
 @test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
 
 # Test writing
-const TEMP_FILE = "$(tempname()).nii"
+const TEMP_FILE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 vol = NIVolume()
 niwrite(TEMP_FILE, vol)
 niread(TEMP_FILE)
 
+const TEMP_GZIPPED_FILE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii.gz")
+niwrite(TEMP_GZIPPED_FILE, vol)
+niread(TEMP_GZIPPED_FILE)
+
 # Write and read DT_BINARY
-const BOOL_WRITE = "$(tempname()).nii"
-const BIT_WRITE = "$(tempname()).nii"
+const BOOL_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
+const BIT_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 mask = rand(Bool, 3, 5, 7) # Array{Bool}
 mask_bitarray = BitArray(mask) # BitArray
 niwrite(BOOL_WRITE, NIVolume(mask))
@@ -59,8 +66,8 @@ niwrite(BIT_WRITE, NIVolume(mask_bitarray))
 @test niread(BIT_WRITE).raw == mask_bitarray
 
 # Open mmaped file for reading and writing
-const WRITE = "$(tempname()).nii"
-const VERIFY_WRITE = "$(tempname()).nii"
+const WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
+const VERIFY_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 cp(NII, WRITE)
 img = niread(WRITE; mmap=true, mode="r+")
 img.raw[1,1,1,1] = 5
@@ -72,18 +79,8 @@ cp(WRITE, VERIFY_WRITE)
 # Big endian
 # const BE = "$(tempname()).nii"
 # download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
-img = niread("data/avg152T1_LR_nifti.nii.gz")
+img = niread(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
 @test size(img) == (91,109,91)
 
 GC.gc() # closes mmapped files
-# Clean up
-rm(NII)
-rm(HDR)
-rm(IMG)
-rm(TEMP_FILE)
-rm(WRITE)
-rm(VERIFY_WRITE)
-rm(BOOL_WRITE)
-rm(BIT_WRITE)
-# rm(BE)
 
