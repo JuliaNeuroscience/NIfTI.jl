@@ -5,7 +5,7 @@ module NIfTI
 
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
-import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
+import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base.setindex!, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
 function define_packed(ty::DataType)
@@ -144,9 +144,9 @@ mutable struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::R
-
 end
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R} =
     niupdate(new(header, extensions, raw))
 
 NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
@@ -567,5 +567,45 @@ size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
 length(f::NIVolume) = length(f.raw)
 lastindex(f::NIVolume) = lastindex(f.raw)
+setindex!(f::NIVolume{T,N}, v, I::Vararg{Int,N}) where {T,N} = setindex!(f.raw, v, collect(I)...)
+
+# support that slicing returns a NIVolume
+Base.similar(f::NIVolume, ::Type{T}, dims::Dims) where {T} =
+    niupdate(NIVolume(deepcopy(f.header), deepcopy(f.extensions), Array{T, length(dims)}(undef, dims)))
+
+Base.:/(f::NIVolume, a::Number) = NIVolume(deepcopy(f.header), deepcopy(f.extensions), f.raw/a)
+Base.:/(a::Number, f::NIVolume) = NIVolume(deepcopy(f.header), deepcopy(f.extensions), a./f.raw)
+
+# support elementwise operations returning NIVolume (https://docs.julialang.org/en/v1/manual/interfaces/index.html#man-interfaces-broadcasting-1)
+Base.BroadcastStyle(::Type{<:NIVolume}) = Broadcast.ArrayStyle{NIVolume}()
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{NIVolume}}, ::Type{ElType}) where ElType
+    # Scan the inputs for the NIVolume:
+    vols = find_vols(bc)
+    if length(vols) > 1
+        @assert check_compatibility(vols)
+    end
+    NIVolume(deepcopy(vols[1].header), deepcopy(vols[1].extensions), similar(vols[1], ElType, axes(bc)).raw)
+end
+
+"`find_vols(As)` returns the NIVolumes among the arguments."
+function find_vols(bc::Base.Broadcast.Broadcasted)
+    vols = []
+    for a in bc.args
+        if a isa NIVolume
+            push!(vols, a)
+        end
+    end
+    vols
+end
+
+# check if all header fields are equal
+allequal(x) = all(y->y==x[1],x)
+function check_compatibility(vols)
+    ret = true
+    for field in fieldnames(NIfTI.NIfTI1Header)
+        ret = ret && allequal([getfield(v.header, field) for v in vols])
+    end
+    ret
+end
 
 end
