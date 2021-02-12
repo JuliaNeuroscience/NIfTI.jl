@@ -19,7 +19,7 @@ function define_packed(ty::DataType)
         function Base.read(io::IO, ::Type{$ty})
             bytes = read!(io, Array{UInt8}(undef, $sz...))
             hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
-            if hdr.sizeof_hdr == SIZEOF_HDR1
+            if hdr.sizeof_hdr == ntoh(Int32(348))
                 return byteswap(hdr), true
             end
             hdr, false
@@ -349,7 +349,7 @@ esize(ex::NIfTI1Extension) = 8 + ceil(Int, length(ex.edata)/16)*16
 function niupdate(vol::NIVolume{T}) where {T}
     vol.header.sizeof_hdr = SIZEOF_HDR1
     vol.header.dim = nidim(vol.raw)
-    vol.header.datatype = to_eltype(T)
+    vol.header.datatype = eltype_to_int16(T)
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
         Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
