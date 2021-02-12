@@ -8,6 +8,8 @@ using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
+include("parsers.jl")
+
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
     sz = pop!(packed_offsets)
@@ -103,31 +105,6 @@ function byteswap(hdr::NIfTI1Header)
     hdr
 end
 
-const SIZEOF_HDR = Int32(348)
-
-const NIfTI_DT_BITSTYPES = Dict{Int16,Type}([
-    (Int16(1), Bool),
-    (Int16(2), UInt8),
-    (Int16(4), Int16),
-    (Int16(8), Int32),
-    (Int16(16), Float32),
-    (Int16(32), ComplexF32),
-    (Int16(64), Float64),
-    (Int16(256), Int8),
-    (Int16(512), UInt16),
-    (Int16(768), UInt32),
-    (Int16(1024), Int64),
-    (Int16(1280), UInt64),
-    (Int16(1792), ComplexF64)
-])
-const NIfTI_DT_BITSTYPES_REVERSE = Dict{Type,Int16}()
-for (k, v) in NIfTI_DT_BITSTYPES
-    NIfTI_DT_BITSTYPES_REVERSE[v] = k
-end
-
-const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
-const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
-
 function string_tuple(x::String, n::Int)
     a = codeunits(x)
     padding = zeros(UInt8, n-length(a))
@@ -135,16 +112,15 @@ function string_tuple(x::String, n::Int)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
-mutable struct NIfTI1Extension
+struct NIfTI1Extension
     ecode::Int32
     edata::Vector{UInt8}
 end
 
-mutable struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::R
-
 end
 NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
     niupdate(new(header, extensions, raw))
@@ -206,15 +182,6 @@ function nidim(x::AbstractArray)
     dim[1] = ndims(x)
     dim[2:dim[1]+1] = [size(x)...]
     (dim...,)
-end
-
-# Gets datatype to be used in header
-function nidatatype(t::Type)
-    t = get(NIfTI_DT_BITSTYPES_REVERSE, t, nothing)
-    if t == nothing
-        error("Unsupported data type $t")
-    end
-    t
 end
 
 # Gets the size of a type in bits
@@ -363,9 +330,9 @@ function NIVolume(
         slice_end = size(raw, dim_info[3]) - 1
     end
 
-    NIVolume(NIfTI1Header(SIZEOF_HDR, string_tuple(data_type, 10), string_tuple(db_name, 18), extents, session_error,
+    NIVolume(NIfTI1Header(SIZEOF_HDR1, string_tuple(data_type, 10), string_tuple(db_name, 18), extents, session_error,
         regular, to_dim_info(dim_info), nidim(raw), intent_p1, intent_p2,
-        intent_p3, intent_code, nidatatype(t), nibitpix(t),
+        intent_p3, intent_code, eltype_to_int16(t), nibitpix(t),
         slice_start, (qfac, voxel_size..., time_step, 0, 0, 0), 352,
         scl_slope, scl_inter, slice_end, slice_code,
         xyzt_units, cal_max, cal_min, slice_duration,
@@ -380,12 +347,12 @@ esize(ex::NIfTI1Extension) = 8 + ceil(Int, length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
-    vol.header.sizeof_hdr = SIZEOF_HDR
+    vol.header.sizeof_hdr = SIZEOF_HDR1
     vol.header.dim = nidim(vol.raw)
-    vol.header.datatype = nidatatype(T)
+    vol.header.datatype = eltype_to_int16(T)
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
-        Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR)
+        Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
     vol
 end
 
@@ -431,7 +398,7 @@ end
 # Read header from a NIfTI file
 function read_header(io::IO)
     header, swapped = read(io, NIfTI1Header)
-    if header.sizeof_hdr != SIZEOF_HDR
+    if header.sizeof_hdr != SIZEOF_HDR1
         error("This is not a NIfTI-1 file")
     end
     header, swapped
@@ -484,10 +451,7 @@ function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r"
     extensions = read_extensions(header_io, header)
     dims = convert(Tuple{Vararg{Int}}, header.dim[2:header.dim[1]+1])
 
-    if !haskey(NIfTI_DT_BITSTYPES, header.datatype)
-        error("data type $(header.datatype) not yet supported")
-    end
-    dtype = NIfTI_DT_BITSTYPES[header.datatype]
+    dtype = to_eltype(header.datatype)
 
     ArrayType = if dtype == Bool
             BitArray{length(dims)}
@@ -569,3 +533,4 @@ length(f::NIVolume) = length(f.raw)
 lastindex(f::NIVolume) = lastindex(f.raw)
 
 end
+
