@@ -112,12 +112,12 @@ function string_tuple(x::String, n::Int)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
-mutable struct NIfTI1Extension
+struct NIfTI1Extension
     ecode::Int32
     edata::Vector{UInt8}
 end
 
-mutable struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTI1Extension}
     raw::R
