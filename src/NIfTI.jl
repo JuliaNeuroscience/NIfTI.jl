@@ -9,6 +9,7 @@ import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
 include("parsers.jl")
+include("extensions.jl")
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
@@ -112,27 +113,22 @@ function string_tuple(x::String, n::Int)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
-struct NIfTI1Extension
-    ecode::Int32
-    edata::Vector{UInt8}
-end
-
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
-    extensions::Vector{NIfTI1Extension}
+    extensions::Vector{NIfTIExtension}
     raw::R
 end
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::R) where {R}=
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::R) where {R}=
     niupdate(new(header, extensions, raw))
 
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
-    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTI1Extension[], raw)
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTI1Extension}, raw::AbstractArray{Bool,N}) where {N} =
+    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTIExtension[], raw)
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
-    NIVolume{Bool,N,typeof(raw)}(header, NIfTI1Extension[], raw)
+    NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
 
 # Conversion factors to mm/ms
 # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
@@ -259,7 +255,7 @@ end
 function NIVolume(
     # Optional MRI volume; if not given, an empty volume is used
     raw::AbstractArray{T}=Int16[],
-    extensions::Union{Vector{NIfTI1Extension},Nothing}=nothing;
+    extensions::Union{Vector{NIfTIExtension},Nothing}=nothing;
 
     # Fields specified as UNUSED in NIfTI1 spec
     data_type::AbstractString="", db_name::AbstractString="", extents::Integer=Int32(0),
@@ -306,7 +302,7 @@ function NIVolume(
     end
 
     if extensions == nothing
-        extensions = NIfTI1Extension[]
+        extensions = NIfTIExtension[]
     end
 
     method2 = qfac != 0 || quatern_b != 0 || quatern_c != 0 || quatern_d != 0 || qoffset_x != 0 ||
@@ -341,9 +337,6 @@ function NIVolume(
         qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
         (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
 end
-
-# Calculates the size of a NIfTI extension
-esize(ex::NIfTI1Extension) = 8 + ceil(Int, length(ex.edata)/16)*16
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
@@ -404,33 +397,6 @@ function read_header(io::IO)
     header, swapped
 end
 
-# Read extension fields following NIfTI header
-function read_extensions(io::IO, header::NIfTI1Header)
-    if eof(io)
-        return NIfTI1Extension[]
-    end
-
-    extension = read!(io, Array{UInt8}(undef, 4))
-    if extension[1] != 1
-        return NIfTI1Extension[]
-    end
-
-    extensions = NIfTI1Extension[]
-    should_bswap = header.dim[1] > 7
-    while header.magic == NP1_MAGIC ? position(io) < header.vox_offset : !eof(io)
-        esize = read(io, Int32)
-        ecode = read(io, Int32)
-
-        if should_bswap
-            esize = bswap(esize)
-            ecode = bswap(ecode)
-        end
-
-        push!(extensions, NIfTI1Extension(ecode, read!(io, Array{UInt8}(undef, esize-8))))
-    end
-    extensions
-end
-
 # Look for a gzip header in an IOStream
 function isgz(io::IO)
     ret = read(io, UInt8) == 0x1F && read(io, UInt8) == 0x8B
@@ -448,7 +414,7 @@ function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r"
     header_gzipped = isgz(file_io)
     header_io = header_gzipped ? GzipDecompressorStream(file_io) : file_io
     header, swapped = read_header(header_io)
-    extensions = read_extensions(header_io, header)
+    extensions = read_extensions(header_io, header.vox_offset - 348)
     dims = convert(Tuple{Vararg{Int}}, header.dim[2:header.dim[1]+1])
 
     dtype = to_eltype(header.datatype)
