@@ -168,8 +168,12 @@ function to_dim_info(dim_info::Tuple{Integer,Integer,Integer})
 end
 
 # Returns or sets dim_info as a tuple whose values are the frequency, phase, and slice dimensions
-function dim_info(header::NIfTI1Header) = (header.dim_info & int8(3), (header.dim_info >> 2) & int8(3),
-    (header.dim_info >> 4) & int8(3))
+function dim_info(header::NIfTI1Header)
+    return (
+        header.dim_info & int8(3),
+        (header.dim_info >> 2) & int8(3),
+        (header.dim_info >> 4) & int8(3)
+    )
 end
 function dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer}
     header.dim_info = to_dim_info(dim_info)
