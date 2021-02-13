@@ -1,5 +1,8 @@
-using NIfTI, CodecZlib, TranscodingStreams
+
+using CodecZlib
+using NIfTI
 using Test
+using TranscodingStreams
 
 function extractto(gzname, out)
     open(out, "w") do io_out
@@ -25,8 +28,7 @@ const IMG = "$hdr_stem.img"
 extractto(GZIPPED_HDR, HDR)
 extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
-for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
-                    (GZIPPED_NII, false), (GZIPPED_HDR, false))
+function image_tests(fname, mmap)
     file = niread(fname, mmap=mmap)
 
     # Header
@@ -41,6 +43,14 @@ for (fname, mmap) in ((NII, false), (NII, true), (HDR, false), (HDR, true),
 
     @assert maximum(file) == maximum(file.raw)
 end
+
+image_tests(NII, false)
+image_tests(NII, true)
+image_tests(HDR, false)
+image_tests(HDR, true)
+image_tests(GZIPPED_NII, false)
+image_tests(GZIPPED_HDR, false)
+
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
 @test_throws ErrorException niread(GZIPPED_HDR; mmap=true)

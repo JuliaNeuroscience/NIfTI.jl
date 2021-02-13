@@ -154,11 +154,11 @@ function read_extensions(io, n)
         if b1 === zero(UInt8)
             return ret
         else
-            counter = position(io)
-            while counter < (n-1)
+            counter = 0
+            while counter < (n - 1)
                 esize = read(io, Int32)
                 ec = read(io, Int32)
-                push!(ret, NIfTIExtension(ec, read!(io, Array{UInt8}(undef, esize-8))))
+                push!(ret, NIfTIExtension(ec, read!(io, Array{UInt8}(undef, esize - 8))))
                 counter += esize
             end
             return ret

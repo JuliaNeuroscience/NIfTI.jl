@@ -10,6 +10,7 @@ export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffi
 
 include("parsers.jl")
 include("extensions.jl")
+include("volume.jl")
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
@@ -163,21 +164,23 @@ function to_dim_info(dim_info::Tuple{Integer,Integer,Integer})
         error("Invalid slice dimension $(dim_info[3])")
     end
 
-    Int8(dim_info[1] | (dim_info[2] << 2) | (dim_info[3] << 4))
+    return Int8(dim_info[1] | (dim_info[2] << 2) | (dim_info[3] << 4))
 end
 
 # Returns or sets dim_info as a tuple whose values are the frequency, phase, and slice dimensions
-dim_info(header::NIfTI1Header) = (header.dim_info & int8(3), (header.dim_info >> 2) & int8(3),
+function dim_info(header::NIfTI1Header) = (header.dim_info & int8(3), (header.dim_info >> 2) & int8(3),
     (header.dim_info >> 4) & int8(3))
-dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer} =
+end
+function dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer}
     header.dim_info = to_dim_info(dim_info)
+end
 
 # Gets dim to be used in header
 function nidim(x::AbstractArray)
     dim = ones(Int16, 8)
     dim[1] = ndims(x)
     dim[2:dim[1]+1] = [size(x)...]
-    (dim...,)
+    return (dim...,)
 end
 
 # Gets the size of a type in bits
@@ -404,85 +407,22 @@ function isgz(io::IO)
     ret
 end
 
-# Read a NIfTI file. The optional mmap argument determines whether the contents are read in full
-# (if false) or mmaped from the disk (if true).
-"""
-
-"""
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
-    file_io = open(file, mode)
-    header_gzipped = isgz(file_io)
-    header_io = header_gzipped ? GzipDecompressorStream(file_io) : file_io
-    header, swapped = read_header(header_io)
-    extensions = read_extensions(header_io, header.vox_offset - 348)
-    dims = convert(Tuple{Vararg{Int}}, header.dim[2:header.dim[1]+1])
+    io = niopen(file, mode)
+    hdr, swapped = read_header(io)
+    ex = read_extensions(io, hdr.vox_offset - 352)
 
-    dtype = to_eltype(header.datatype)
-
-    ArrayType = if dtype == Bool
-            BitArray{length(dims)}
-        else
-            Array{dtype, length(dims)}
-        end
-
-    local volume
-    if header.magic == NP1_MAGIC
-        if mmap
-            if header_gzipped
-                close(header_io)
-                close(file_io)
-                error("cannot mmap a gzipped NIfTI file")
-            else
-                volume = Mmap.mmap(header_io, ArrayType, dims, Int(header.vox_offset))
-            end
-        else
-            seekstart(header_io)
-            read(header_io, Int(header.vox_offset))
-            volume = read!(header_io, ArrayType(undef, dims))
-            if !eof(header_io)
-                println("Warning! File size does not match length of data; some data may be ignored")
-            end
-            close(header_io)
-            !header_gzipped || close(file_io)
-        end
-    elseif header.magic == NI1_MAGIC
-        close(header_io)
-        !header_gzipped || close(file_io)
-
-        volume_name = replace(file, r"\.\w+(\.gz)?$" => "")*".img"
-        if !isfile(volume_name)
-            if isfile(volume_name*".gz")
-                volume_name *= ".gz"
-            else
-                error("NIfTI file is dual file storage, but $volume_name does not exist")
-            end
-        end
-
-        volume_io = open(volume_name, mode)
-        volume_gzipped = isgz(volume_io)
-        if mmap
-            if volume_gzipped
-                close(volume_io)
-                error("cannot mmap a gzipped NIfTI file")
-            else
-                volume = Mmap.mmap(volume_io, ArrayType, dims)
-            end
-        else
-            if volume_gzipped
-                volume_gz_io = GzipDecompressorStream(volume_io)
-                volume = read!(volume_gz_io, ArrayType(undef, dims))
-                close(volume_gz_io)
-            else
-                volume = read!(volume_io, ArrayType(undef, dims))
-            end
-            close(volume_io)
-        end
-    end
-    if swapped && sizeof(eltype(volume)) > 1
-        volume = mappedarray(ntoh, hton, volume)
+    if hdr.magic === NP1_MAGIC
+        vol = read_volume(io, to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
+    else
+        vol = read_volume(niopen(hdr_to_img(file), mode), to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
     end
 
-    return NIVolume(header, extensions, volume)
+    if swapped && sizeof(eltype(vol)) > 1
+        return NIVolume(hdr, ex, mappedarray(ntoh, hton, vol))
+    else
+        return NIVolume(hdr, ex, vol)
+    end
 end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data

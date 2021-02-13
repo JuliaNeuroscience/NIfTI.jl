@@ -176,6 +176,25 @@ for T in (Int16, Int32)
 end
 
 
+to_dimensions(d::NTuple{8,Int16}) = ntuple(i ->Int(@inbounds(getfield(d, i + 1))), first(d))
+to_dimensions(d::NTuple{8,Int}) = ntuple(i ->@inbounds(getfield(d, i + 1)), first(d))
+
+function hdr_to_img(file::AbstractString)
+    volume_name = replace(file, r"\.\w+(\.gz)?$" => "")*".img"
+    if isfile(volume_name)
+        return volume_name
+    else
+        volume_name *= ".gz"
+        if isfile(volume_name)
+            return volume_name
+        else
+            error("NIfTI file is dual file storage, but $volume_name does not exist")
+        end
+    end
+end
+
+
+
 #=
 to_spatial_units(x::Int8) = _to_spatial_units(x & 0x07)
 @inline function _to_spatial_units(x::UInt8)
