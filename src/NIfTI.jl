@@ -117,27 +117,6 @@ function getaffine(h::NIfTI1Header)
     end
 end
 
-# Set affine matrix of NIfTI header
-function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
-    size(affine, 1) == size(affine, 2) == 4 ||
-        error("affine matrix must be 4x4")
-    affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
-        error("last row of affine matrix must be [0 0 0 1]")
-    h.qform_code = one(Int16)
-    h.sform_code = one(Int16)
-    h.pixdim = (zero(Float32), h.pixdim[2:end]...,)
-    h.quatern_b = zero(Float32)
-    h.quatern_c = zero(Float32)
-    h.quatern_d = zero(Float32)
-    h.qoffset_x = zero(Float32)
-    h.qoffset_y = zero(Float32)
-    h.qoffset_z = zero(Float32)
-    h.srow_x = convert(Tuple{Vararg{Float32}}, (affine[1, :]...,))
-    h.srow_y = convert(Tuple{Vararg{Float32}}, (affine[2, :]...,))
-    h.srow_z = convert(Tuple{Vararg{Float32}}, (affine[3, :]...,))
-    h
-end
-
 # Constructor
 function NIVolume(
     # Optional MRI volume; if not given, an empty volume is used
@@ -265,16 +244,6 @@ function NIVolume(
         extensions,
         raw
     )
-end
-
-# Validates the header of a volume and updates it to match the volume's contents
-function niupdate(vol::NIVolume{T}) where {T}
-    vol.header.dim = nidim(vol.raw)
-    vol.header.datatype = eltype_to_int16(T)
-    vol.header.bitpix = nibitpix(T)
-    vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
-        Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
-    vol
 end
 
 # Avoid method ambiguity

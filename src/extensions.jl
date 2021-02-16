@@ -94,6 +94,7 @@ end
 * `edata::Vector{UInt8}`: raw data with no byte-swapping
 """
 struct NIfTIExtension
+    esize::Int32
     ecode::Int32
     edata::Vector{UInt8}
 end
@@ -135,11 +136,7 @@ NIfTIExtensions should be of a byte size that is a mulitple of 16. This includes
 raw encoding of the the `ecode` (as an Int32) and the esize itself (also as an
 Int32). Therefore, `8 + sizeof(ex.edata)` should be divisible by 16.
 """
-function esize(ex::NIfTIExtension)
-    ret = 8 + length(ex.edata)
-    @assert ret%16 != 0 "NIfTIExtension has innapropriate size. See docstrings for more details."
-    return ret
-end
+esize(ex::NIfTIExtension) = getfield(ex, :esize)
 
 function read_extensions(io, n)
     ret = NIfTIExtension[]
@@ -158,7 +155,7 @@ function read_extensions(io, n)
             while counter < (n - 1)
                 esize = read(io, Int32)
                 ec = read(io, Int32)
-                push!(ret, NIfTIExtension(ec, read!(io, Array{UInt8}(undef, esize - 8))))
+                push!(ret, NIfTIExtension(esize, ec, read!(io, Array{UInt8}(undef, esize - 8))))
                 counter += esize
             end
             return ret
@@ -168,11 +165,11 @@ end
 
 function write_extension(io, x::AbstractVector{NIfTIExtension})
     if isempty(x)
-        write(io, fill(UInt8(0), 4))
+        write(io, UInt8[0, 0, 0, 0])
     else
         write(io, UInt8[1, 0, 0, 0])
         for ex in x
-            write(io, Int32(esize(ex)))
+            write(io, ex.esize)
             write(io, ex.ecode)
             write(io, ex.edata)
         end

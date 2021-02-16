@@ -1,79 +1,7 @@
 
-###
-### read
-###
-#=
-@generated read_header(io, ::Type{T}) where {T} = _read_header(T)
-@generated read_header_swap(io, ::Type{T}) where {T} = _read_header_swap(T)
+abstract type NIfTIHeader end
 
-function _read_header(::Type{T}) where {T}
-    if T <: NIfTI1Header
-        out = Expr(:new, T, Int32(348))
-    else
-        out = Expr(:new, T, Int32(540))
-    end
-    for i in 2:nfields(T)
-        T_i = fieldtype(T, i)
-        if T_i <: Tuple
-            t = Expr(:tuple)
-            for p in T_i.parameters
-                push!(t.args, :(read(io, $p)))
-            end
-            push!(out.args, t)
-        else
-            push!(out.args, :(read(io, $T_i)))
-        end
-    end
-    return out
-end
-
-function _read_header_swap(::Type{T}) where {T}
-    if T <: NIfTI1Header
-        out = Expr(:new, T, Int32(348))
-    else
-        out = Expr(:new, T, Int32(540))
-    end
-    for i in 2:nfields(T)
-        T_i = fieldtype(T, i)
-        if T_i <: Tuple
-            t = Expr(:tuple)
-            for p in T_i.parameters
-                push!(t.args, :(bswap(read(io, $p))))
-            end
-            push!(out.args, t)
-        else
-            push!(out.args, :(bswap(read(io, $T_i))))
-        end
-    end
-    return out
-end
-
-###
-### write
-###
-@generated write_header(io, x::X) where {X} = _generate_write(X)
-
-
-function _generate_write(::Type{T}) where {T}
-    if T <: NIfTI1Header
-        out = Expr(:block, write(io, Int32(348)))
-    else
-        out = Expr(:block, write(io, Int32(540)))
-    end
-    for i in 2:nfields(T)
-        T_i = fieldtype(T, i)
-        n = fieldname(T, i)
-        if T_i <: Tuple
-            push!(out.args, write(io, Ref(x.$n)))
-        else
-            push!(out.args, write(io, x.$n))
-        end
-    end
-    return out
-end
-=#
-
-struct NIfTI1Header
+struct NIfTI1Header <: NIfTIHeader
     data_type::NTuple{10,UInt8}
     db_name::NTuple{18,UInt8}
     extents::Int32
@@ -125,7 +53,7 @@ struct NIfTI1Header
     magic::NTuple{4,UInt8}
 end
 
-struct NIfTI2Header
+struct NIfTI2Header <: NIfTIHeader
     magic::NTuple{8,UInt8}
     datatype::Int16
     bitpix::Int16
@@ -168,51 +96,15 @@ sizeof_hdr(::NIfTI1Header) = Int32(348)
 
 sizeof_hdr(::NIfTI2Header) = Int32(540)
 
-
-function define_packed(T::DataType)
-    offsets = [sizeof(x) for x in T.types]
-    packed_offsets = cumsum(offsets)
-    sz = pop!(packed_offsets)
-    pushfirst!(packed_offsets, 0)
-
-    @eval begin
-        function read_header(io::IO, ::Type{$T})
-            bytes = read!(io, Array{UInt8}(undef, ($sz,)))
-            ptr = pointer(bytes)
-            hdr = $(Expr(:new, T, [:(unsafe_load(convert(Ptr{$(T.types[i])}, ptr+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
-            return hdr
-        end
-
-        function read_header_swap(io::IO, ::Type{$T})
-            bytes = read!(io, Array{UInt8}(undef, ($sz,)))
-            ptr = pointer(bytes)
-            hdr = $(Expr(:new, T, [:(_byteswap(unsafe_load(convert(Ptr{$(T.types[i])}, ptr+$(packed_offsets[i]))))) for i = 1:length(packed_offsets)]...,))
-            return hdr
-        end
-        #=
-        function Base.write(io::IO, x::$T)
-            bytes = $(ifelse(T<:NIfTI1Header, UInt8[0x5c,0x01,0x00,0x00], UInt8[0x1c,0x02,0x00,0x00]))
-            for name in fieldnames($T)
-                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
-            end
-            write(io, bytes)
-            $(sz + 4)
-        end
-        =#
+function write_header(io, x::NIfTIHeader)
+    write(io, sizeof_hdr(x))
+    for n in fieldnames(NIfTI1Header)
+        write_type(io, getfield(x, n))
     end
-    nothing
 end
 
-function write_header(io, x::NIfTI2Header)
-    write(io, Int32(540))
-    _write_header(io, x)
-end
-
-function write_header(io, x::NIfTI1Header)
-    write(io, Int32(348))
-    _write_header(io, x)
-end
-
+write_type(io, x) = write(io, x)
+write_type(io, x::Tuple) = write(io, Ref(x))
 
 @generated function _write_header(io, x::T) where {T}
     out = Expr(:block)
@@ -228,41 +120,43 @@ end
     return out
 end
 
-
-#=
-@generated function write_header(io, x::T) where {T}
-    generate_write_header(T)
-end
-
-function generate_write_header(::Type{T}) where {T}
-    if T <: NIfTI1Header
-        out = Expr(:block, :(write(io, Int32(348))))
-    else
-        out = Expr(:block, :(write(io, Int32(540))))
-    end
-    for i in 2:nfields(T)
-        T_i = fieldtype(T, i)
-        n = fieldname(T, i)
-        if T_i <: Tuple
-            push!(out.args, write(io, Ref(x.$n)))
+@generated function read_header(io, ::Type{T}) where {T}
+    out = Expr(:new, T)
+    for p in fieldtypes(T)
+        if p <: Tuple
+            t = Expr(:tuple)
+            for p_i in p.parameters
+                push!(t.args, :(read(io, $p_i)))
+            end
+            push!(out.args, t)
         else
-            push!(out.args, write(io, x.$n))
+            push!(out.args, :(read(io, $p)))
         end
     end
     return out
 end
-=#
 
-_byteswap(x::UInt8) = x
-_byteswap(x::Int8) = x
-_byteswap(x) = bswap(x)
-_byteswap(x::Tuple{Vararg{UInt8}}) = x
-_byteswap(x::Tuple{Vararg{Int8}}) = x
-_byteswap(x::Tuple{Vararg{Any}}) = map(bswap, x)
-
-define_packed(NIfTI1Header)
-define_packed(NIfTI2Header)
-
+@generated function read_header_swap(io, ::Type{T}) where {T}
+    out = Expr(:new, T)
+    for p in fieldtypes(T)
+        if p <: Tuple{Vararg{UInt}}
+            t = Expr(:tuple)
+            for p_i in p.parameters
+                push!(t.args, :(read(io, $p_i)))
+            end
+            push!(out.args, t)
+        elseif p <: Tuple
+            t = Expr(:tuple)
+            for p_i in p.parameters
+                push!(t.args, :(bswap(read(io, $p_i))))
+            end
+            push!(out.args, t)
+        else
+            push!(out.args, :(bswap(read(io, $p))))
+        end
+    end
+    return out
+end
 
 niopen(file::AbstractString, mode::AbstractString) = niopen(open(file, mode))
 @inline function niopen(io)
