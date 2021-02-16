@@ -33,8 +33,6 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
 
-
-
 # Always in mm
 function voxel_size(hdr)
     [hdr.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[hdr.xyzt_units & Int8(3)] for i = 2:min(hdr.dim[1], 3)+1]
