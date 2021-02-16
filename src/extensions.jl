@@ -166,7 +166,7 @@ function read_extensions(io, n)
     end
 end
 
-function write(io::IO, x::Vector{NIfTIExtension})
+function write_extension(io, x::AbstractVector{NIfTIExtension})
     if isempty(x)
         write(io, fill(UInt8(0), 4))
     else
@@ -175,7 +175,6 @@ function write(io::IO, x::Vector{NIfTIExtension})
             write(io, Int32(esize(ex)))
             write(io, ex.ecode)
             write(io, ex.edata)
-#            write(io, zeros(UInt8, esize(ex) - length(ex.edata)))
         end
     end
 end

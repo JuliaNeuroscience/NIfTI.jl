@@ -9,6 +9,13 @@ const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
 const NP2_MAGIC = (0x6e,0x2b,0x32,0x00,0x0d,0x0a,0x1a,0x0a)
 const NI2_MAGIC = (0x6e,0x69,0x32,0x00,0x0d,0x0a,0x1a,0x0a)
 
+function is_volume_separate(x::NTuple{N,UInt8}) where {N}
+    if N === 4
+        return x === NI1_MAGIC
+    else
+        return x === NI2_MAGIC
+    end
+end
 
 function to_eltype_error(@nospecialize(x))
     throw("NIfTI parse erorr: $x does not have a corresponding eltype ")
@@ -16,8 +23,8 @@ end
 
 eltype_to_int16(::Type{T}) where {T} = error("Unsupported data type $T")
 
-for T in (Int16, Int32)
-    symint = Symbol(lowercase(string(T)))
+for (T, n) in ((Int16, 16), (Int32, 32))
+    symint = Symbol(:i, n)
     @eval begin
         #= TODO handle intent codes
         @inline function to_intent(x::Int16)
@@ -176,8 +183,7 @@ for T in (Int16, Int32)
 end
 
 
-to_dimensions(d::NTuple{8,Int16}) = ntuple(i ->Int(@inbounds(getfield(d, i + 1))), first(d))
-to_dimensions(d::NTuple{8,Int}) = ntuple(i ->@inbounds(getfield(d, i + 1)), first(d))
+to_dimensions(d::NTuple{8}) = ntuple(i ->Int(@inbounds(getfield(d, i + 1))), first(d))
 
 function hdr_to_img(file::AbstractString)
     volume_name = replace(file, r"\.\w+(\.gz)?$" => "")*".img"
@@ -189,6 +195,59 @@ function hdr_to_img(file::AbstractString)
             return volume_name
         else
             error("NIfTI file is dual file storage, but $volume_name does not exist")
+        end
+    end
+end
+
+# Conversion factors to mm/ms
+# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
+const SPATIAL_UNIT_MULTIPLIERS = [
+    1000,   # 1 => NIfTI_UNITS_METER
+    1,      # 2 => NIfTI_UNITS_MM
+    0.001   # 3 => NIfTI_UNITS_MICRON
+]
+const TIME_UNIT_MULTIPLIERS = [
+    1000,   # NIfTI_UNITS_SEC
+    1,      # NIfTI_UNITS_MSEC
+    0.001,  # NIfTI_UNITS_USEC
+    1,      # NIfTI_UNITS_HZ
+    1,      # NIfTI_UNITS_PPM
+    1       # NIfTI_UNITS_RADS
+]
+
+function to_time_units(hdr)
+    x = hdr.xyzt_units >>> 3
+    if x === Int8(1)
+        return 1000
+    elseif x === Int8(2)
+        return 1
+    elseif x === Int8(3)
+        return 0.001
+    elseif x === Int8(3)
+        return 1
+    end
+end
+
+function to_spatial_units(hdr)
+    x = hdr.xyzt_units & Int8(3)
+    if x === Int8(1)
+        return 1000
+    elseif x === Int8(2)
+        return 1
+    else
+        return 0.001
+    end
+end
+
+# Gets dim to be used in header
+function to_dim_i16(x::NTuple{N}) where {N}
+    return ntuple(Val(8)) do i
+        if i === 1
+            Int16(N)
+        elseif i > (N + 1)
+            zero(Int16)
+        else
+            @inbounds(getfield(x, i - 1))
         end
     end
 end

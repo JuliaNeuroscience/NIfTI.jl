@@ -28,29 +28,33 @@ const IMG = "$hdr_stem.img"
 extractto(GZIPPED_HDR, HDR)
 extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
-function image_tests(fname, mmap)
-    file = niread(fname, mmap=mmap)
-
+function image_tests(img)
     # Header
-    @test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
-    @test voxel_size(file.header) ≈ Float32[2.0, 2.0, 2.2]
-    @test size(file) == (128, 96, 24, 2)
+    @test time_step(img.header) == 2000000 # Actually an error in the file AFAIK
+    @test voxel_size(img.header) ≈ Float32[2.0, 2.0, 2.2]
+    @test size(img) == (128, 96, 24, 2)
 
     # Content
-    @test file.raw[65, 49, 13, :][:] == [265, 266]
-    @test vox(file, 64, 48, 12, :)[:] == [265, 266]
-    @test vox(file, 69, 56, 13, :)[:] == [502, 521]
+    @test img.raw[65, 49, 13, :][:] == [265, 266]
+    @test vox(img, 64, 48, 12, :)[:] == [265, 266]
+    @test vox(img, 69, 56, 13, :)[:] == [502, 521]
 
-    @assert maximum(file) == maximum(file.raw)
+    @assert maximum(img) == maximum(img.raw)
 end
 
-image_tests(NII, false)
-image_tests(NII, true)
-image_tests(HDR, false)
-image_tests(HDR, true)
-image_tests(GZIPPED_NII, false)
-image_tests(GZIPPED_HDR, false)
+image_tests(niread(NII, mmap=false))
+image_tests(niread(NII, mmap=true))
 
+file = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
+niwrite(file, niread(NII))
+image_tests(niread(NII, mmap=false))
+
+
+image_tests(niread(HDR, mmap=false))
+image_tests(niread(HDR, mmap=true))
+
+image_tests(niread(GZIPPED_NII, mmap=false))
+image_tests(niread(GZIPPED_HDR, mmap=false))
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
 @test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
@@ -68,11 +72,13 @@ niread(TEMP_GZIPPED_FILE)
 # Write and read DT_BINARY
 const BOOL_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const BIT_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
-mask = rand(Bool, 3, 5, 7) # Array{Bool}
+mask = [true false true; false true false; false true true]
 mask_bitarray = BitArray(mask) # BitArray
+
 niwrite(BOOL_WRITE, NIVolume(mask))
-niwrite(BIT_WRITE, NIVolume(mask_bitarray))
 @test niread(BOOL_WRITE).raw == mask
+
+niwrite(BIT_WRITE, NIVolume(mask_bitarray))
 @test niread(BIT_WRITE).raw == mask_bitarray
 
 # Open mmaped file for reading and writing

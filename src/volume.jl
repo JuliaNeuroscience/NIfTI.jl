@@ -1,43 +1,50 @@
 
-function read_volume(
-    io::TranscodingStream{GzipDecompressor},
-    ::Type{T},
-    dim::Tuple{Vararg{Any,N}},
-    map::Bool,
-) where {T,N}
-
+function read_volume(io::TranscodingStream{GzipDecompressor}, hdr, mmap::Bool)
+    T = to_eltype(hdr.datatype)
+    dims = to_dimensions(hdr.dim)
     if T === Bool
-        A = BitArray{N}
+        A = BitArray{length(dims)}
     else
-        A = Array{T,N}
+        A = Array{T,length(dims)}
     end
-    if map
+    if mmap
         close(io)
         error("cannot mmap a gzipped NIfTI file")
     else
-        return read!(io, A(undef, dim))
+        return read!(io, A(undef, dims))
     end
 end
 
-function read_volume(io, ::Type{T}, dim::Tuple{Vararg{Any,N}}, map::Bool) where {T,N}
+function read_volume(io, hdr, mmap::Bool)
+    T = to_eltype(hdr.datatype)
+    dims = to_dimensions(hdr.dim)
     if T === Bool
-        A = BitArray{N}
+        A = BitArray{length(dims)}
     else
-        A = Array{T,N}
+        A = Array{T,length(dims)}
     end
-    if map
-        return Mmap.mmap(io, A, dim)
+    if mmap
+        return Mmap.mmap(io, A, dims)
     else
-        return read!(io, A(undef, dim))
+        return read!(io, A(undef, dims))
     end
 end
 
-niopen(file::AbstractString, mode) = niopen(open(file, mode))
-function niopen(io)
-    if isgz(io)
-        return GzipDecompressorStream(io)
+function read_volume(file::AbstractString, mode::AbstractString, hdr, mmap::Bool)
+    io = open(file, mode)
+    b1 = read(io, UInt8)
+    b2 = read(io, UInt8)
+    if b1 === 0x1F && b2 === 0x8B
+        seek(io, 0)
+        return read_volume(GzipDecompressorStream(io), hdr, mmap)
     else
-        return io
+        seek(io, 0)
+        return read_volume(io, hdr, mmap)
     end
 end
+
+
+write_volume(io, x::AbstractArray{T}) where {T} = write(io, x)
+write_volume(io, x::AbstractArray{Bool}) = write_volume(io, BitArray(x))
+write_volume(io, x::BitArray) = write(io, x)
 
