@@ -38,6 +38,10 @@
         return :Eval
     elseif x === Int32(40)
         return :Matlab
+    elseif x === Int32(42)
+        return :Quantiphyse
+    elseif x === Int32(44)
+        return :MRS
     else
         return :Ignore
     end
@@ -82,6 +86,10 @@ end
         return Int32(38)
     elseif x === :Matlab
         return Int32(40)
+    elseif x === :Quantiphyse
+        return Int32(42)
+    elseif x === :MRS
+        return Int32(44)
     else
         return Int32(0)
     end
@@ -108,8 +116,8 @@ end
 * Comment: plain ASCII text only
 * XCEDE: http://www.nbirn.net/Resources/Users/Applications/xcede/index.html
 * JIMDimInfo: Dimensionalinformation for the JIM software (XML format)
-* WorkflowFWDS:
-* Freesurfer:
+* WorkflowFWDS: fissell/NIFTI_ECODE_WORKFLOW_FWDS/NIFTI_ECODE_WORKFLOW_FWDS.html
+* Freesurfer: http://surfer.nmr.mgh.harvard.edu 
 * PyPickle: embedded Python objects
 * MiNDIdent: LONI MiND codes: http://www.loni.ucla.edu/twiki/bin/view/Main/MiND
 * BValue
@@ -118,11 +126,12 @@ end
 * SHCDegreeOrder
 * Voxbo: www.voxbo.org
 * Caret: http://brainvis.wustl.edu/wiki/index.php/Caret:Documentation
-* CIfTI
+* CIfTI: CIFTI-2_Main_FINAL_1March2014.pdf
 * VariableFrameTiming
 * AgilentProcpar
-* Eval
-* Matlab
+* Eval: Munster University Hospital
+* Matlab: http://www.mathworks.com/matlabcentral/fileexchange/42997-dicom-to-nifti-converter
+* MRS: magnetic resonance spectroscopy
 """
 ecode(x::NIfTIExtension) = to_ecode(x.ecode)
 ecode(x::Vector{NIfTIExtension}) = map(ecode, x)
@@ -132,9 +141,9 @@ ecode(x::Vector{NIfTIExtension}) = map(ecode, x)
 """
     esize(ex::NIfTIExtension)
 
-NIfTIExtensions should be of a byte size that is a mulitple of 16. This includes
-raw encoding of the the `ecode` (as an Int32) and the esize itself (also as an
-Int32). Therefore, `8 + sizeof(ex.edata)` should be divisible by 16.
+NIfTIExtensions should be of a byte size that is a mulitple of 16. This includes raw
+encoding of the the `ecode` (as an Int32) and the esize itself (also as an Int32).
+Therefore, `8 + sizeof(ex.edata)` should be divisible by 16.
 """
 esize(ex::NIfTIExtension) = getfield(ex, :esize)
 

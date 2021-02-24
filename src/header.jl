@@ -1,4 +1,48 @@
 
+"""
+    NIfTIHeader
+
+* `dim_info`: MRI slice ordering.
+* `dim::NTuple{8}`: Data array dimensions.
+* `datatype`: Defines data type!
+* `bitpix`: Number bits/voxel.
+* `slice_start`: First slice index.
+* `pixdim[8]`: Grid spacings.
+* `vox_offset`: Offset into .nii file
+* `xyzt_units`: Units of pixdim[1..4]
+* `slice_duration: Time for 1 slice.
+* `toffset`: Time axis shift.
+* `slice_end`: Last slice index.
+* `slice_code`: Slice timing order.
+
+* `descrip::NTuple{80,UInt8}`: any text you like
+* `aux_file::NTuple{24,UInt8}`: auxiliary filename.
+
+* `qform_code`: NIFTI_XFORM_* code.
+* `sform_code`: NIFTI_XFORM_* code.
+* `quatern_b`: Quaternion b param.
+* `quatern_c`: Quaternion c param.
+* `quatern_d`: Quaternion d param.
+* `qoffset_x`: Quaternion x shift
+* `qoffset_y`: Quaternion y shift.
+* `qoffset_z`: Quaternion z shift.
+* `srow_x`: 1st row affine transform
+* `srow_y`: 2nd row affine transform
+* `srow_z`: 3rd row affine transform
+
+* `intent_name[16]`: name' or meaning of data.
+* `intent_p1`: 1st intent parameter.
+* `intent_p2`: 2nd intent parameter.
+* `intent_p3`: 3rd intent parameter.
+* `intent_code`: NIFTI_INTENT_* code.
+
+# We don't use these
+* `scl_slope`: Data scaling: slope.
+* `scl_inter`: Data scaling: offset.
+* `cal_max`: Max display intensity
+* `cal_min`: Min display intensity
+
+"""
 abstract type NIfTIHeader end
 
 struct NIfTI1Header <: NIfTIHeader
@@ -7,7 +51,6 @@ struct NIfTI1Header <: NIfTIHeader
     extents::Int32
     session_error::Int16
     regular::Int8
-
     dim_info::UInt8
     dim::NTuple{8,Int16}
     intent_p1::Float32
@@ -28,13 +71,10 @@ struct NIfTI1Header <: NIfTIHeader
     cal_min::Float32
     slice_duration::Float32
     toffset::Float32
-
     glmax::Int32
     glmin::Int32
-
     descrip::NTuple{80,UInt8}
     aux_file::NTuple{24,UInt8}
-
     qform_code::Int16
     sform_code::Int16
     quatern_b::Float32
@@ -43,13 +83,10 @@ struct NIfTI1Header <: NIfTIHeader
     qoffset_x::Float32
     qoffset_y::Float32
     qoffset_z::Float32
-
     srow_x::NTuple{4,Float32}
     srow_y::NTuple{4,Float32}
     srow_z::NTuple{4,Float32}
-
     intent_name::NTuple{16,UInt8}
-
     magic::NTuple{4,UInt8}
 end
 
@@ -160,14 +197,12 @@ end
 
 niopen(file::AbstractString, mode::AbstractString) = niopen(open(file, mode))
 @inline function niopen(io)
-    b1 = read(io, UInt8)
-    b2 = read(io, UInt8)
-    if b1 === 0x1F && b2 === 0x8B
+    b1, b2 = read(io, 2)
+    if (b1, b2) === (0x1F, 0x8B)
         seek(io, 0)
         return niopen(GzipDecompressorStream(io))
     else
-        b3 = read(io, UInt8)
-        b4 = read(io, UInt8)
+        b3, b4 = read(io, 2)
         if (b1,b2,b3,b4) === (0x5c,0x01,0x00,0x00)
             return io, read_header(io, NIfTI1Header), false
         elseif (b1,b2,b3,b4) === (0x1c,0x02,0x00,0x00)

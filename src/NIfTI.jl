@@ -1,7 +1,10 @@
 
 module NIfTI
 
-using CodecZlib, Mmap, MappedArrays, TranscodingStreams
+using CodecZlib
+using Mmap
+using MappedArrays
+using TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
 export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
@@ -268,7 +271,7 @@ function niwrite(io, vol::NIVolume)
     write_volume(io, vol.raw)
 end
 
-function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
+function niread(file::AbstractString; mmap::Bool=true, mode::AbstractString="r")
     io, hdr, swapped = niopen(file, mode)
     ex = read_extensions(io, hdr.vox_offset - (sizeof_hdr(hdr) + 4))
 
