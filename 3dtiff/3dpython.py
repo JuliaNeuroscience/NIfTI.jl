@@ -2,6 +2,7 @@ import skimage.io
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+##put in files here
 d = skimage.io.imread('*png')
 img = skimage.io.imread('*.tiff')
 fig, ax = plt.subplots(1,2, figsize=(20,10))
