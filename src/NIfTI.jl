@@ -221,7 +221,7 @@ function getaffine(h::NIfTI1Header)
             pixdim[3]
             pixdim[1]*pixdim[4]
         ]
-        return vcat(hcat(A*B, [
+        return vcat(hcat(A.*(B'), [
             h.qoffset_x
             h.qoffset_y
             h.qoffset_z
