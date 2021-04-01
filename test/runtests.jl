@@ -17,7 +17,7 @@ const TEMP_DIR_NAME = mktempdir()
 
 # empty file test
 const EMPTY_NII = joinpath(dirname(@__FILE__), "data/empty.nii.gz")
-@test_throws ErrorException niread(EMPTY_NII)
+@test_throws EOFError niread(EMPTY_NII)
 
 # single file storage
 const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")

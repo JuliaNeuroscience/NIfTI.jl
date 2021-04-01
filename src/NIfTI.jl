@@ -412,7 +412,7 @@ function isgz(io::IO)
         ret
     catch err
         if isa(err, EOFError)
-            @error "Reading the file resulted in an EOF error and the end of the file was read.\nIt is likely that the file was corrupted or is empty (0 bytes)."
+            @debug "reading the file resulted in an EOF error and \nthe end of the file was read.\nNo more data was available to read from the filestream.\nIt is likely that the file was corrupted or is empty (0 bytes)."
             rethrow(err)
         end
     end 
