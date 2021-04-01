@@ -406,9 +406,15 @@ end
 
 # Look for a gzip header in an IOStream
 function isgz(io::IO)
-    ret = read(io, UInt8) == 0x1F && read(io, UInt8) == 0x8B
-    seek(io, 0)
-    ret
+    try
+        ret = read(io, UInt8) == 0x1F && read(io, UInt8) == 0x8B
+        seek(io, 0)
+        ret
+    catch err
+        if isa(err, EOFError)
+            @warn "Reading the file resulted in an EOF error and the end of the file was read.\nIt is likely that the file was corrupted or is empty (0 bytes)."
+        end
+    end 
 end
 
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
