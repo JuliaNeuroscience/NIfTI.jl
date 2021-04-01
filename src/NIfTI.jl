@@ -408,11 +408,12 @@ end
 function isgz(io::IO)
     try
         ret = read(io, UInt8) == 0x1F && read(io, UInt8) == 0x8B
-        seek(io, 0)
+        seekstart(io)
         ret
     catch err
         if isa(err, EOFError)
-            @warn "Reading the file resulted in an EOF error and the end of the file was read.\nIt is likely that the file was corrupted or is empty (0 bytes)."
+            @error "Reading the file resulted in an EOF error and the end of the file was read.\nIt is likely that the file was corrupted or is empty (0 bytes)."
+            rethrow(err)
         end
     end 
 end
