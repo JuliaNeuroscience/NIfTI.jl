@@ -193,7 +193,41 @@ function hdr_to_img(file::AbstractString)
     end
 end
 
+function string_tuple(x::String, n::Int)
+    a = codeunits(x)
+    padding = zeros(UInt8, n-length(a))
+    (a..., padding...)
+end
+string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
+# Conversion factors to mm/ms
+# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
+const SPATIAL_UNIT_MULTIPLIERS = [
+    1000,   # 1 => NIfTI_UNITS_METER
+    1,      # 2 => NIfTI_UNITS_MM
+    0.001   # 3 => NIfTI_UNITS_MICRON
+]
+const TIME_UNIT_MULTIPLIERS = [
+    1000,   # NIfTI_UNITS_SEC
+    1,      # NIfTI_UNITS_MSEC
+    0.001,  # NIfTI_UNITS_USEC
+    1,      # NIfTI_UNITS_HZ
+    1,      # NIfTI_UNITS_PPM
+    1       # NIfTI_UNITS_RADS
+]
+
+# Gets dim to be used in header
+function to_dim_i16(x::NTuple{N}) where {N}
+    return ntuple(Val(8)) do i
+        if i === 1
+            Int16(N)
+        elseif i > (N + 1)
+            zero(Int16)
+        else
+            @inbounds(getfield(x, i - 1))
+        end
+    end
+end
 
 #=
 to_spatial_units(x::Int8) = _to_spatial_units(x & 0x07)
