@@ -107,13 +107,6 @@ function byteswap(hdr::NIfTI1Header)
     hdr
 end
 
-function string_tuple(x::String, n::Int)
-    a = codeunits(x)
-    padding = zeros(UInt8, n-length(a))
-    (a..., padding...)
-end
-string_tuple(x::AbstractString) = string_tuple(bytestring(x))
-
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTIExtension}
@@ -130,22 +123,6 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
     NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
-
-# Conversion factors to mm/ms
-# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
-const SPATIAL_UNIT_MULTIPLIERS = [
-    1000,   # 1 => NIfTI_UNITS_METER
-    1,      # 2 => NIfTI_UNITS_MM
-    0.001   # 3 => NIfTI_UNITS_MICRON
-]
-const TIME_UNIT_MULTIPLIERS = [
-    1000,   # NIfTI_UNITS_SEC
-    1,      # NIfTI_UNITS_MSEC
-    0.001,  # NIfTI_UNITS_USEC
-    1,      # NIfTI_UNITS_HZ
-    1,      # NIfTI_UNITS_PPM
-    1       # NIfTI_UNITS_RADS
-]
 
 # Always in mm
 voxel_size(header::NIfTI1Header) =
@@ -177,14 +154,6 @@ function dim_info(header::NIfTI1Header)
 end
 function dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer}
     header.dim_info = to_dim_info(dim_info)
-end
-
-# Gets dim to be used in header
-function nidim(x::AbstractArray)
-    dim = ones(Int16, 8)
-    dim[1] = ndims(x)
-    dim[2:dim[1]+1] = [size(x)...]
-    return (dim...,)
 end
 
 # Gets the size of a type in bits
@@ -334,7 +303,7 @@ function NIVolume(
     end
 
     NIVolume(NIfTI1Header(SIZEOF_HDR1, string_tuple(data_type, 10), string_tuple(db_name, 18), extents, session_error,
-        regular, to_dim_info(dim_info), nidim(raw), intent_p1, intent_p2,
+        regular, to_dim_info(dim_info), to_dim_i16(size(raw)), intent_p1, intent_p2,
         intent_p3, intent_code, eltype_to_int16(t), nibitpix(t),
         slice_start, (qfac, voxel_size..., time_step, 0, 0, 0), 352,
         scl_slope, scl_inter, slice_end, slice_code,
@@ -348,7 +317,7 @@ end
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
     vol.header.sizeof_hdr = SIZEOF_HDR1
-    vol.header.dim = nidim(vol.raw)
+    vol.header.dim = to_dim_i16(size(vol.raw))
     vol.header.datatype = eltype_to_int16(T)
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
