@@ -1,10 +1,11 @@
 
+get_sform(x::NIVolume) = get_sform(x.header)
 function get_sform(hdr::NIfTI1Header)
     if hdr.sform_code > 0
-        return @inbounds T[
-            hdr.srow_x[1]  hdr.srow_x[2]  hdr.srow_x[2]  hdr.srow_x[2]
-            hdr.srow_y[1]  hdr.srow_y[2]  hdr.srow_y[2]  hdr.srow_y[2]
-            hdr.srow_z[1]  hdr.srow_z[2]  hdr.srow_z[2]  hdr.srow_z[2]
+        return @inbounds Float32[
+            hdr.srow_x[1]  hdr.srow_x[2]  hdr.srow_x[3]  hdr.srow_x[4]
+            hdr.srow_y[1]  hdr.srow_y[2]  hdr.srow_y[3]  hdr.srow_y[4]
+            hdr.srow_z[1]  hdr.srow_z[2]  hdr.srow_z[3]  hdr.srow_z[4]
             0              0              0              1
         ]
     else
@@ -13,9 +14,10 @@ function get_sform(hdr::NIfTI1Header)
     end
 end
 
+get_qform(x::NIVolume) = get_qform(x.header)
 function get_qform(hdr::NIfTI1Header)
     if hdr.qform_code <= 0
-        return @inbounds T[
+        return @inbounds Float32[
             hdr.pixdim[2]   0              0              0
             0               hdr.pixdim[3]  0              0
             0               0              hdr.pixdim[4]  0
@@ -33,8 +35,20 @@ function get_qform(hdr::NIfTI1Header)
         b = hdr.quatern_b
         c = hdr.quatern_c
         d = hdr.quatern_d
-        a = sqrt(1 - b*b - c*c - d*d)
-        return T[
+        b2 = b*b
+        c2 = c*c
+        d2 = d*d
+        a = 1 - b2 - c2 - d2
+        if a < 1.e-7
+            a = 1 / sqrt(b2 + c2 + d2)
+            b *= a
+            c *= a
+            d *= a       # normalize (b,c,d) vector
+            a = zero(a)  # a = 0 ==> 180 degree rotation
+        else
+            a = sqrt(a)   # angle = 2*arccos(a)
+        end
+        return Float32[
             (a*a+b*b-c*c-d*d)*dx   (2*b*c-2*a*d)*dy       (2*b*d+2*a*c)*dz      hdr.qoffset_x
             (2*b*c+2*a*d)*dx       (a*a+c*c-b*b-d*d)*dy   (2*c*d-2*a*b)*dz      hdr.qoffset_y
             (2*b*d-2*a*c)*dx       (2*c*d+2*a*b)*dy       (a*a+d*d-c*c-b*b)*dz  hdr.qoffset_z
@@ -43,9 +57,11 @@ function get_qform(hdr::NIfTI1Header)
     end
 end
 
+getaffine(x::NIVolume) = getaffine(x.header)
+
 # Convert a NIfTI header to a 4x4 affine transformation matrix
 function getaffine(hdr::NIfTI1Header)
-    if h.sform_code > 0
+    if hdr.sform_code > 0
         return get_sform(hdr)
     else
         return get_qform(hdr)

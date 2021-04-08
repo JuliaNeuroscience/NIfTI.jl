@@ -46,6 +46,20 @@ function image_tests(fname, mmap)
     @test vox(file, 69, 56, 13, :)[:] == [502, 521]
 
     @assert maximum(file) == maximum(file.raw)
+
+    @test getaffine(file) ≈ [
+        -2.0                    6.714715653593746e-19  9.081024511081715e-18  117.8551025390625
+        6.714715653593746e-19  1.9737114906311035    -0.35552823543548584   -35.72294235229492
+        8.25548088896093e-18   0.3232076168060303     2.171081781387329     -7.248798370361328
+        0.0                    0.0                    0.0                   1.0
+    ]
+
+    @test NIfTI.get_qform(file) ≈ [
+     -2.0          7.75482f-26  -6.93824f-27  117.855
+      7.75482f-26  1.97371      -0.355528     -35.7229
+      6.30749f-27  0.323208      2.17108       -7.2488
+      0.0          0.0           0.0            1.0
+    ]
 end
 
 image_tests(NII, false)
@@ -54,7 +68,6 @@ image_tests(HDR, false)
 image_tests(HDR, true)
 image_tests(GZIPPED_NII, false)
 image_tests(GZIPPED_HDR, false)
-
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
 @test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
