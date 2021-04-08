@@ -124,6 +124,9 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
 
+
+include("coordinates.jl")
+
 # Always in mm
 voxel_size(header::NIfTI1Header) =
     [header.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & Int8(3)] for i = 2:min(header.dim[1], 3)+1]
@@ -159,73 +162,6 @@ end
 # Gets the size of a type in bits
 nibitpix(t::Type) = Int16(sizeof(t)*8)
 nibitpix(::Type{Bool}) = Int16(1)
-
-# Convert a NIfTI header to a 4x4 affine transformation matrix
-function getaffine(h::NIfTI1Header)
-    pixdim = convert(Tuple{Vararg{Float64}}, h.pixdim)
-    # See documentation at
-    # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/qsform.html
-    if h.sform_code > 0
-        # Method 3
-        return Float64[
-            collect(h.srow_x)'
-            collect(h.srow_y)'
-            collect(h.srow_z)'
-            0 0 0 1
-        ]
-    elseif h.qform_code > 0
-        # Method 2
-        # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/quatern.html
-        b::Float64 = h.quatern_b
-        c::Float64 = h.quatern_c
-        d::Float64 = h.quatern_d
-        a = sqrt(1 - b*b - c*c - d*d)
-        A = [
-            a*a+b*b-c*c-d*d   2*b*c-2*a*d       2*b*d+2*a*c
-            2*b*c+2*a*d       a*a+c*c-b*b-d*d   2*c*d-2*a*b
-            2*b*d-2*a*c       2*c*d+2*a*b       a*a+d*d-c*c-b*b
-        ]
-        B = [
-            pixdim[2]
-            pixdim[3]
-            pixdim[1]*pixdim[4]
-        ]
-        return vcat(hcat(A*B, [
-            h.qoffset_x
-            h.qoffset_y
-            h.qoffset_z
-        ]), [0 0 0 1])
-    elseif h.qform_code == 0
-        # Method 1
-        return Float64[
-             pixdim[2] 0         0          0 0
-                       0 pixdim[3]          0 0
-                       0         0  bitpix[4] 0
-                       0         0          0 1
-        ]
-    end
-end
-
-# Set affine matrix of NIfTI header
-function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
-    size(affine, 1) == size(affine, 2) == 4 ||
-        error("affine matrix must be 4x4")
-    affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
-        error("last row of affine matrix must be [0 0 0 1]")
-    h.qform_code = one(Int16)
-    h.sform_code = one(Int16)
-    h.pixdim = (zero(Float32), h.pixdim[2:end]...,)
-    h.quatern_b = zero(Float32)
-    h.quatern_c = zero(Float32)
-    h.quatern_d = zero(Float32)
-    h.qoffset_x = zero(Float32)
-    h.qoffset_y = zero(Float32)
-    h.qoffset_z = zero(Float32)
-    h.srow_x = convert(Tuple{Vararg{Float32}}, (affine[1, :]...,))
-    h.srow_y = convert(Tuple{Vararg{Float32}}, (affine[2, :]...,))
-    h.srow_z = convert(Tuple{Vararg{Float32}}, (affine[3, :]...,))
-    h
-end
 
 # Constructor
 function NIVolume(
