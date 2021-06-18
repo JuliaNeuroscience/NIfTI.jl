@@ -89,3 +89,230 @@ function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
     h
 end
 
+orientation(x) = orientation(x.header)
+function orientation(hdr::NIfTI1Header)
+    if hdr.sform_code > 0
+        return @inbounds _dir2ori(
+            hdr.srow_x[1], hdr.srow_x[2], hdr.srow_x[3],
+            hdr.srow_y[1], hdr.srow_y[2], hdr.srow_y[3],
+            hdr.srow_z[1], hdr.srow_z[2], hdr.srow_z[3]
+        )
+    elseif hdr.qform_code <= 0
+        return @inbounds _dir2ori(
+            hdr.pixdim[2], 0, 0,
+            0, hdr.pixdim[3], 0,
+            0, 0, hdr.pixdim[4]
+        )
+    else
+        dx = hdr.pixdim[2]
+        dy = hdr.pixdim[3]
+        # aka qfac left handedness
+        if hdr.pixdim[1] < 0  
+            dz = -hdr.pixdim[4]
+        else
+            dz = hdr.pixdim[4]
+        end
+        b = hdr.quatern_b
+        c = hdr.quatern_c
+        d = hdr.quatern_d
+        b2 = b*b
+        c2 = c*c
+        d2 = d*d
+        a = 1 - b2 - c2 - d2
+        if a < 1.e-7
+            a = 1 / sqrt(b2 + c2 + d2)
+            b *= a
+            c *= a
+            d *= a       # normalize (b,c,d) vector
+            a = zero(a)  # a = 0 ==> 180 degree rotation
+        else
+            a = sqrt(a)   # angle = 2*arccos(a)
+        end
+        return _dir2ori(
+            (a*a+b*b-c*c-d*d)*dx,  (2*b*c-2*a*d)*dy,      (2*b*d+2*a*c)*dz,
+            (2*b*c+2*a*d)*dx,      (a*a+c*c-b*b-d*d)*dy,  (2*c*d-2*a*b)*dz,
+            (2*b*d-2*a*c)*dx,      (2*c*d+2*a*b)*dy,      (a*a+d*d-c*c-b*b)*dz,
+        )
+    end
+end
+
+@inline function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
+    return _dir2ori(promote(xi, xj, xk, yi, yj, yk, zi, zj, zk)...)
+end
+function _dir2ori(xi::T, xj::T, xk::T, yi::T, yj::T, yk::T, zi::T, zj::T, zk::T) where {T}
+    # Normalize column vectors to get unit vectors along each ijk-axis
+    # normalize i axis
+    val = sqrt(xi*xi + yi*yi + zi*zi)
+    if val == 0.0
+        error("Invalid rotation directions.")
+    end
+    xi /= val
+    yi /= val
+    zi /= val
+
+    # normalize j axis
+    val = sqrt(xj*xj + yj*yj + zj*zj)
+    if val == 0.0
+        error("Invalid rotation directions.")
+    end
+    xj /= val
+    yj /= val
+    zj /= val
+
+    # orthogonalize j axis to i axis, if needed
+    val = xi*xj + yi*yj + zi* zj  # dot product between i and j
+    if abs(val) > .0001
+        xj -= val*xi
+        yj -= val*yi
+        zj -= val*zi
+
+        val = sqrt(xj*xj + yj*yj + zj*zj)  # must renormalize
+        if val == 0.0
+            error("The first and second dimensions cannot be parallel.")
+        end
+        xj /= val
+        yj /= val
+        zj /= val
+    end
+
+    # normalize k axis; if it is zero, make it the cross product i x j
+    val = sqrt(xk*xk + yk*yk + zk*zk)
+    if val == 0.0
+        xk = yi*zj-zi*yj
+        yk = zi*xj-zj*xi
+        zk = xi*yj-yi*xj
+    else
+        xk = xk/val
+        yk = yk/val
+        zk = zk/val
+    end
+
+    # orthogonalize k to i
+    val = xi*xk + yi*yk + zi*zk  # dot product between i and k
+    if abs(val) > 0.0001
+        xk -= val*xi
+        yk -= val*yi
+        zk -= val*zi
+
+        # must renormalize
+        val = sqrt(xk*xk + yk*yk + zk*zk)
+        if val == 0.0
+            return 0  # I think this is suppose to be an error output
+        end
+        xk /= val
+        yk /= val
+        zk /= val
+    end
+
+    # orthogonalize k to j */
+    val = xj*xk + yj*yk + zj*zk  # dot product between j and k
+   if abs(val) > 0.0001
+       xk -= val*xj
+       yk -= val*yj
+       zk -= val*zj
+
+       val = sqrt(xk*xk + yk*yk + zk*zk)
+       if val == 0.0
+           return 0  # bad
+       end
+       xk /= val
+       yk /= val
+       zk /= val
+   end
+
+
+    Q = T[[xi xj xk]
+          [yi yj yk]
+          [zi zj zk]]
+
+    # at this point Q is the rotation matrix from the (i,j,k) to (x,y,z) axes
+    detQ = det(Q)
+    # if( detQ == 0.0 ) return ; /* shouldn't happen unless user is a DUFIS */
+
+    # Build and test all possible +1/-1 coordinate permutation matrices P;
+    # then find the P such that the rotation matrix M=PQ is closest to the
+    # identity, in the sense of M having the smallest total rotation angle.
+
+    # Despite the formidable looking 6 nested loops, there are
+    # only 3*3*3*2*2*2 = 216 passes, which will run very quickly.
+    vbest = T(-666)
+    ibest = pbest=qbest=rbest= 1.0
+    jbest = 2.0
+    kbest = 3.0
+    @inbounds for i in 1:3       # i = column number to use for row #1
+        for j in 1:3             # j = column number to use for row #2
+            if i == j
+                continue
+            end
+            for k in 1:3     # k = column number to use for row #3
+                if i == k || j ==k
+                    continue
+                end
+                P = fill(0.0, 3, 3)
+                for p in (-1, 1)           # p,q,r are -1 or +1
+                    for q in (-1, 1)       # and go into rows 1,2,3
+                        for r in (-1, 1)
+                            P[1,i] = p
+                            P[2,j] = q
+                            P[3,k] = r
+                            detP = det(P)  # sign of permutation
+                            if detP * detQ < 0.0  # doesn't match sign of Q
+                                continue
+                            end
+                            M = P * Q
+                            # angle of M rotation = 2.0 * acos(0.5 * sqrt(1.0 + trace(M)))
+                            # we want largest trace(M) == smallest angle == M nearest to I
+                            val = M[1,1] + M[2,2] + M[3,3]
+                            if val > vbest
+                                vbest = val
+                                ibest = i
+                                jbest = j
+                                kbest = k
+                                pbest = p
+                                qbest = q
+                                rbest = r
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    # At this point ibest is 1 or 2 or 3; pbest is -1 or +1; etc.
+
+    # The matrix P that corresponds is the best permutation approximation
+    # to Q-inverse; that is, P (approximately) takes (x,y,z) coordinates
+    # to the (i,j,k) axes.
+
+    # For example, the first row of P (which contains pbest in column ibest)
+    # determines the way the i axis points relative to the anatomical
+    # (x,y,z) axes.  If ibest is 2, then the i axis is along the y axis,
+    # which is direction P2A (if pbest > 0) or A2P (if pbest < 0).
+
+    # So, using ibest and pbest, we can assign the output code for
+    # the i axis.  Mutatis mutandis for the j and k axes, of course.
+
+    return (_encoding_name(ibest*pbest), _encoding_name(jbest*qbest), _encoding_name(kbest*rbest))
+end
+
+
+_encoding_name(x) = _encoding_name(Int(x))
+@inline function _encoding_name(x::Int)
+    if x === 1
+        return :left
+    elseif x === -1
+        return :right
+    elseif x === 2
+        return :posterior
+    elseif x === -2
+        return :anterior
+    elseif x === 3
+        return :inferior
+    elseif x === -3
+        return :superior
+    else
+        error("$x does not map to a dimension name.")
+    end
+end
+
+
