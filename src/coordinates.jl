@@ -18,23 +18,6 @@ end
            (x31 * y13 + x32 * y23 + x33 * y33)    # z33
 end
 
-function _mul_trace(x, y)
-    _mul_trace(
-        x[1,1], x[1,2], x[1,3], x[2,1], x[2,2], x[2,3], x[3,1], x[3,2], x[3,3],
-        y[1,1], y[1,2], y[1,3], y[2,1], y[2,2], y[2,3], y[3,1], y[3,2], y[3,3]
-    )
-end
-
-function _mul_trace2(x, y)
-    z = x * y
-    z[1,1] + z[2,2] + z[3,3]
-end
-
-x =[[1 0 0]
- [0 3 0]
- [0 0 5]]
-
-
 get_sform(x::NIVolume) = get_sform(x.header)
 function get_sform(hdr::NIfTI1Header)
     if hdr.sform_code > 0
@@ -200,7 +183,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
     # Normalize column vectors to get unit vectors along each ijk-axis
     # normalize i axis
     val = sqrt(xi*xi + yi*yi + zi*zi)
-    if val == 0.0
+    if val == 0
         error("Invalid rotation directions.")
     end
     xi /= val
@@ -209,7 +192,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
 
     # normalize j axis
     val = sqrt(xj*xj + yj*yj + zj*zj)
-    if val == 0.0
+    if val == 0
         error("Invalid rotation directions.")
     end
     xj /= val
@@ -224,7 +207,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
         zj -= val*zi
 
         val = sqrt(xj*xj + yj*yj + zj*zj)  # must renormalize
-        if val == 0.0
+        if val == 0
             error("The first and second dimensions cannot be parallel.")
         end
         xj /= val
@@ -234,7 +217,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
 
     # normalize k axis; if it is zero, make it the cross product i x j
     val = sqrt(xk*xk + yk*yk + zk*zk)
-    if val == 0.0
+    if val == 0
         xk = yi*zj-zi*yj
         yk = zi*xj-zj*xi
         zk = xi*yj-yi*xj
@@ -253,7 +236,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
 
         # must renormalize
         val = sqrt(xk*xk + yk*yk + zk*zk)
-        if val == 0.0
+        if val == 0
             return 0  # I think this is suppose to be an error output
         end
         xk /= val
@@ -269,7 +252,7 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
         zk -= val*zj
 
         val = sqrt(xk*xk + yk*yk + zk*zk)
-        if val == 0.0
+        if val == 0
             return 0  # bad
         end
         xk /= val
@@ -288,9 +271,9 @@ function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
     # Despite the formidable looking 6 nested loops, there are
     # only 3*3*3*2*2*2 = 216 passes, which will run very quickly.
     vbest = -666
-    ibest = pbest=qbest=rbest= 1.0
-    jbest = 2.0
-    kbest = 3.0
+    ibest = pbest=qbest=rbest= 1
+    jbest = 2
+    kbest = 3
     for (i, j, k) in ((1, 2, 3), (1, 3, 2), (2, 1, 3), (2, 3, 1), (3, 1, 2), (3, 2, 1))
         for p in (-1, 1)           # p,q,r are -1 or +1
             for q in (-1, 1)       # and go into rows 1,2,3
