@@ -1,4 +1,40 @@
 
+@inline function _det(r11, r12, r13, r21, r22, r23, r31, r32, r33)
+    r11 * r22 * r33 -
+    r11 * r32 * r23 -
+    r21 * r12 * r33 +
+    r21 * r32 * r13 +
+    r31 * r12 * r23 -
+    r31 * r22 * r13
+end
+
+@inline function _mul_trace(
+    x11, x12, x13, x21, x22, x23, x31, x32, x33,
+    y11, y12, y13, y21, y22, y23, y31, y32, y33
+)
+
+    return (x11 * y11 + x12 * y21 + x13 * y31) +  # z11
+           (x21 * y12 + x22 * y22 + x23 * y32) +  # z22
+           (x31 * y13 + x32 * y23 + x33 * y33)    # z33
+end
+
+function _mul_trace(x, y)
+    _mul_trace(
+        x[1,1], x[1,2], x[1,3], x[2,1], x[2,2], x[2,3], x[3,1], x[3,2], x[3,3],
+        y[1,1], y[1,2], y[1,3], y[2,1], y[2,2], y[2,3], y[3,1], y[3,2], y[3,3]
+    )
+end
+
+function _mul_trace2(x, y)
+    z = x * y
+    z[1,1] + z[2,2] + z[3,3]
+end
+
+x =[[1 0 0]
+ [0 3 0]
+ [0 0 5]]
+
+
 get_sform(x::NIVolume) = get_sform(x.header)
 function get_sform(hdr::NIfTI1Header)
     if hdr.sform_code > 0
@@ -89,6 +125,11 @@ function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
     h
 end
 
+"""
+    orientation(img)::Tuple{Symbol,Symbol,Symbol}
+
+Returns a tuple providing the orientation of a NIfTI image.
+"""
 orientation(x) = orientation(x.header)
 function orientation(hdr::NIfTI1Header)
     if hdr.sform_code > 0
@@ -136,10 +177,26 @@ function orientation(hdr::NIfTI1Header)
     end
 end
 
-@inline function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
-    return _dir2ori(promote(xi, xj, xk, yi, yj, yk, zi, zj, zk)...)
+_encoding_name(x) = _encoding_name(Int(x))
+@inline function _encoding_name(x::Int)
+    if x === 1
+        return :left
+    elseif x === -1
+        return :right
+    elseif x === 2
+        return :posterior
+    elseif x === -2
+        return :anterior
+    elseif x === 3
+        return :inferior
+    elseif x === -3
+        return :superior
+    else
+        error("$x does not map to a dimension name.")
+    end
 end
-function _dir2ori(xi::T, xj::T, xk::T, yi::T, yj::T, yk::T, zi::T, zj::T, zk::T) where {T}
+
+function _dir2ori(xi, xj, xk, yi, yj, yk, zi, zj, zk)
     # Normalize column vectors to get unit vectors along each ijk-axis
     # normalize i axis
     val = sqrt(xi*xi + yi*yi + zi*zi)
@@ -206,27 +263,22 @@ function _dir2ori(xi::T, xj::T, xk::T, yi::T, yj::T, yk::T, zi::T, zj::T, zk::T)
 
     # orthogonalize k to j */
     val = xj*xk + yj*yk + zj*zk  # dot product between j and k
-   if abs(val) > 0.0001
-       xk -= val*xj
-       yk -= val*yj
-       zk -= val*zj
+    if abs(val) > 0.0001
+        xk -= val*xj
+        yk -= val*yj
+        zk -= val*zj
 
-       val = sqrt(xk*xk + yk*yk + zk*zk)
-       if val == 0.0
-           return 0  # bad
-       end
-       xk /= val
-       yk /= val
-       zk /= val
-   end
-
-
-    Q = T[[xi xj xk]
-          [yi yj yk]
-          [zi zj zk]]
+        val = sqrt(xk*xk + yk*yk + zk*zk)
+        if val == 0.0
+            return 0  # bad
+        end
+        xk /= val
+        yk /= val
+        zk /= val
+    end
 
     # at this point Q is the rotation matrix from the (i,j,k) to (x,y,z) axes
-    detQ = det(Q)
+    detQ = _det(xi, xj, xk, yi, yj, yk, zi, zj, zk)
     # if( detQ == 0.0 ) return ; /* shouldn't happen unless user is a DUFIS */
 
     # Build and test all possible +1/-1 coordinate permutation matrices P;
@@ -235,43 +287,40 @@ function _dir2ori(xi::T, xj::T, xk::T, yi::T, yj::T, yk::T, zi::T, zj::T, zk::T)
 
     # Despite the formidable looking 6 nested loops, there are
     # only 3*3*3*2*2*2 = 216 passes, which will run very quickly.
-    vbest = T(-666)
+    vbest = -666
     ibest = pbest=qbest=rbest= 1.0
     jbest = 2.0
     kbest = 3.0
-    @inbounds for i in 1:3       # i = column number to use for row #1
-        for j in 1:3             # j = column number to use for row #2
-            if i == j
-                continue
-            end
-            for k in 1:3     # k = column number to use for row #3
-                if i == k || j ==k
-                    continue
-                end
-                P = fill(0.0, 3, 3)
-                for p in (-1, 1)           # p,q,r are -1 or +1
-                    for q in (-1, 1)       # and go into rows 1,2,3
-                        for r in (-1, 1)
-                            P[1,i] = p
-                            P[2,j] = q
-                            P[3,k] = r
-                            detP = det(P)  # sign of permutation
-                            if detP * detQ < 0.0  # doesn't match sign of Q
-                                continue
-                            end
-                            M = P * Q
-                            # angle of M rotation = 2.0 * acos(0.5 * sqrt(1.0 + trace(M)))
-                            # we want largest trace(M) == smallest angle == M nearest to I
-                            val = M[1,1] + M[2,2] + M[3,3]
-                            if val > vbest
-                                vbest = val
-                                ibest = i
-                                jbest = j
-                                kbest = k
-                                pbest = p
-                                qbest = q
-                                rbest = r
-                            end
+    for (i, j, k) in ((1, 2, 3), (1, 3, 2), (2, 1, 3), (2, 3, 1), (3, 1, 2), (3, 2, 1))
+        for p in (-1, 1)           # p,q,r are -1 or +1
+            for q in (-1, 1)       # and go into rows 1,2,3
+                for r in (-1, 1)
+                    p11, p12, p13 = _nval_other_zero(i, p)
+                    p21, p22, p23 = _nval_other_zero(j, q)
+                    p31, p32, p33 = _nval_other_zero(k, r)
+                    #=
+                    P[1,i] = p
+                    P[2,j] = q
+                    P[3,k] = r
+                    detP = det(P)  # sign of permutation
+                    =#
+                    detP = _det(p11, p12, p13, p21, p22, p23, p31, p32, p33)
+                    # doesn't match sign of Q
+                    if detP * detQ >= 0.0
+                        # angle of M rotation = 2.0 * acos(0.5 * sqrt(1.0 + trace(M)))
+                        # we want largest trace(M) == smallest angle == M nearest to I
+                        val = _mul_trace(
+                            p11, p12, p13, p21, p22, p23, p31, p32, p33,
+                            xi, xj, xk, yi, yj, yk, zi, zj, zk
+                        )
+                        if val > vbest
+                            vbest = val
+                            ibest = i
+                            jbest = j
+                            kbest = k
+                            pbest = p
+                            qbest = q
+                            rbest = r
                         end
                     end
                 end
@@ -295,23 +344,13 @@ function _dir2ori(xi::T, xj::T, xk::T, yi::T, yj::T, yk::T, zi::T, zj::T, zk::T)
     return (_encoding_name(ibest*pbest), _encoding_name(jbest*qbest), _encoding_name(kbest*rbest))
 end
 
-
-_encoding_name(x) = _encoding_name(Int(x))
-@inline function _encoding_name(x::Int)
-    if x === 1
-        return :left
-    elseif x === -1
-        return :right
-    elseif x === 2
-        return :posterior
-    elseif x === -2
-        return :anterior
-    elseif x === 3
-        return :inferior
-    elseif x === -3
-        return :superior
+@inline function _nval_other_zero(n, val)
+    if n === 1
+        return val, 0, 0
+    elseif n === 2
+        return 0, val, 0
     else
-        error("$x does not map to a dimension name.")
+        return 0, 0, val
     end
 end
 
