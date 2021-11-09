@@ -15,9 +15,9 @@ ni = niread("my.nii.gz") # gzipped NIfTI files are detected automatically
 
 The header is in `nii.header`; NIfTI extensions are in `nii.extensions`; the raw
 volume is in `nii.raw`.
-
+### abide
 To mmap the NIfTI file:
-###update JULIA
+### update JULIA
 ```julia
 ni = niread("my.nii", mmap=true)
 ```
