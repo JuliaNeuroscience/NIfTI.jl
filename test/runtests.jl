@@ -60,6 +60,7 @@ function image_tests(fname, mmap)
       6.30749f-27  0.323208      2.17108       -7.2488
       0.0          0.0           0.0            1.0
     ]
+    @test NIfTI.orientation(file) == (:right, :posterior, :inferior)
 end
 
 image_tests(NII, false)
@@ -111,3 +112,15 @@ img = niread(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
 
 GC.gc() # closes mmapped files
 
+@test NIfTI._dir2ori(-1.0, 0.0, 0.0,
+                      0.0, 1.0, 0.0,
+                      0.0, 0.0, 1.0) == (:right, :posterior, :inferior)
+
+@test NIfTI._dir2ori(1.0,  0.0, 0.0,
+                     0.0, -1.0, 0.0,
+                     0.0,  0.0, 1.0) == (:left, :anterior, :inferior)
+
+
+@test NIfTI._dir2ori(1.0,  0.0, 0.0,
+                     0.0, -1.0, 0.0,
+                     0.0,  0.0, -1.0) == (:left, :anterior, :superior)
