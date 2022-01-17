@@ -6,7 +6,7 @@ module NIfTI
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
-export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine, new_vol_like
 
 include("parsers.jl")
 include("extensions.jl")
@@ -107,6 +107,17 @@ function byteswap(hdr::NIfTI1Header)
     hdr
 end
 
+"""
+    NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+An `N`-dimensional NIfTI volume, with raw data of type 
+`R`. Note that if `raw <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
+updated to be consistent with the raw volume. 
+
+# Members
+- `header`: a `NIfTI1Header`
+- `extensions`: a Vector of `NIfTIExtension`s 
+- `raw`: Raw data of type `R` from the volume
+"""
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTIExtension}
@@ -127,11 +138,21 @@ NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
 
 include("coordinates.jl")
 
-# Always in mm
+
+"""
+    voxel_size(header::NIfTI1Header)
+
+Get the voxel size **in mm** from a `NIfTI1Header`.
+"""
 voxel_size(header::NIfTI1Header) =
     [header.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & Int8(3)] for i = 2:min(header.dim[1], 3)+1]
 
 # Always in ms
+"""
+    time_step(header::NIfTI1Header)
+
+Get the TR **in ms** from a `NIfTI1Header`.
+"""
 time_step(header::NIfTI1Header) =
     header.pixdim[5] * TIME_UNIT_MULTIPLIERS[header.xyzt_units >> 3]
 
@@ -250,6 +271,15 @@ function NIVolume(
         (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
 end
 
+"""
+    new_vol_like(vol::NIVolume{T}, raw::R) where {R,T}
+
+Convenience function to create a new NIfTI volume with data `raw`, using 
+the header and extensions of `vol`.
+"""
+new_vol_like(vol::NIVolume{T}, raw::R) where {R,T} = NIVolume(vol.header,vol.extensions,raw)
+    
+
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
     vol.header.sizeof_hdr = SIZEOF_HDR1
@@ -285,7 +315,11 @@ function write(io::IO, vol::NIVolume)
     end
 end
 
-# Convenience function to write a NIfTI file given a path
+"""
+    niwrite(path::AbstractString, vol::NIVolume)   
+
+Write a NIVolume to a file specified by `path`.
+"""
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
         io = open(path, "w")
@@ -323,6 +357,11 @@ function isgz(io::IO)
     end 
 end
 
+"""
+    niread(file; mmap=false, mode="r")
+
+Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
+"""
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
@@ -347,7 +386,15 @@ end
 
 add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
+
+"""
+    vox(f::NIVolume, args...,)
+
+Get the value of a voxel from volume `f`, scaled by slope and intercept given in header, with 0-based indexing.
+The length of `args` should be the number of dimensions in `f`.
+"""
 @inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
+
 size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
