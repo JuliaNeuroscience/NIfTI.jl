@@ -3,7 +3,7 @@ module NIfTI
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
-export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine, new_vol_like
 
 include("parsers.jl")
 include("extensions.jl")
@@ -175,6 +175,15 @@ function NIVolume(
         qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
         (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
 end
+
+"""
+    new_vol_like(vol::NIVolume{T}, raw::R) where {R,T}
+
+Convenience function to create a new NIfTI volume with data `raw`, using 
+the header and extensions of `vol`.
+"""
+new_vol_like(vol::NIVolume{T}, raw::R) where {R,T} = NIVolume(vol.header,vol.extensions,raw)
+    
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
