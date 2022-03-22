@@ -116,7 +116,7 @@ updated to be consistent with the raw volume.
 # Members
 - `header`: a `NIfTI1Header`
 - `extensions`: a Vector of `NIfTIExtension`s 
-- `raw`: Raw data of type `R` from the volume
+- `raw`: Raw data of type `R`
 """
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
