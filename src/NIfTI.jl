@@ -110,7 +110,7 @@ end
 """
     NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
 An `N`-dimensional NIfTI volume, with raw data of type 
-`R`. Note that if `raw <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
+`R`. Note that if `R <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
 updated to be consistent with the raw volume. 
 
 # Members
