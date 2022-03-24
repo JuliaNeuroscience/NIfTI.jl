@@ -3,112 +3,17 @@ module NIfTI
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
 
 import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
-export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine, new_vol_like
+export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
 
 include("parsers.jl")
 include("extensions.jl")
 include("volume.jl")
 include("headers.jl")
 
-function define_packed(ty::DataType)
-    packed_offsets = cumsum([sizeof(x) for x in ty.types])
-    sz = pop!(packed_offsets)
-    pushfirst!(packed_offsets, 0)
-
-    @eval begin
-        function Base.read(io::IO, ::Type{$ty})
-            bytes = read!(io, Array{UInt8}(undef, $sz...))
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
-            if hdr.sizeof_hdr == ntoh(Int32(348))
-                return byteswap(hdr), true
-            end
-            hdr, false
-        end
-        function Base.write(io::IO, x::$ty)
-            bytes = UInt8[]
-            for name in fieldnames($ty)
-                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
-            end
-            write(io, bytes)
-            $sz
-        end
-    end
-    nothing
-end
-
-mutable struct NIfTI1Header
-    sizeof_hdr::Int32
-
-    data_type::NTuple{10,UInt8}
-    db_name::NTuple{18,UInt8}
-    extents::Int32
-    session_error::Int16
-    regular::Int8
-
-    dim_info::Int8
-    dim::NTuple{8,Int16}
-    intent_p1::Float32
-    intent_p2::Float32
-    intent_p3::Float32
-    intent_code::Int16
-    datatype::Int16
-    bitpix::Int16
-    slice_start::Int16
-    pixdim::NTuple{8,Float32}
-    vox_offset::Float32
-    scl_slope::Float32
-    scl_inter::Float32
-    slice_end::Int16
-    slice_code::Int8
-    xyzt_units::Int8
-    cal_max::Float32
-    cal_min::Float32
-    slice_duration::Float32
-    toffset::Float32
-
-    glmax::Int32
-    glmin::Int32
-
-    descrip::NTuple{80,UInt8}
-    aux_file::NTuple{24,UInt8}
-
-    qform_code::Int16
-    sform_code::Int16
-    quatern_b::Float32
-    quatern_c::Float32
-    quatern_d::Float32
-    qoffset_x::Float32
-    qoffset_y::Float32
-    qoffset_z::Float32
-
-    srow_x::NTuple{4,Float32}
-    srow_y::NTuple{4,Float32}
-    srow_z::NTuple{4,Float32}
-
-    intent_name::NTuple{16,UInt8}
-
-    magic::NTuple{4,UInt8}
-end
-define_packed(NIfTI1Header)
-
-# byteswapping
-
-function byteswap(hdr::NIfTI1Header)
-    for fn in fieldnames(typeof(hdr))
-        val = getfield(hdr, fn)
-        if isa(val, Number) && sizeof(val) > 1
-            setfield!(hdr, fn, ntoh(val))
-        elseif isa(val, NTuple) && sizeof(eltype(val)) > 1
-            setfield!(hdr, fn, map(ntoh, val))
-        end
-    end
-    hdr
-end
-
 """
     NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
 An `N`-dimensional NIfTI volume, with raw data of type 
-`R`. Note that if `raw <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
+`R`. Note that if `R <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
 updated to be consistent with the raw volume. 
 
 # Members
@@ -270,15 +175,6 @@ function NIVolume(
         qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
         (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
 end
-
-"""
-    new_vol_like(vol::NIVolume{T}, raw::R) where {R,T}
-
-Convenience function to create a new NIfTI volume with data `raw`, using 
-the header and extensions of `vol`.
-"""
-new_vol_like(vol::NIVolume{T}, raw::R) where {R,T} = NIVolume(vol.header,vol.extensions,raw)
-    
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T}) where {T}
