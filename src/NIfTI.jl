@@ -1,6 +1,3 @@
-# NIfTI.jl
-# Methods for reading NIfTI MRI files in Julia
-
 module NIfTI
 
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
@@ -11,6 +8,7 @@ export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffi
 include("parsers.jl")
 include("extensions.jl")
 include("volume.jl")
+include("headers.jl")
 
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
@@ -116,7 +114,7 @@ updated to be consistent with the raw volume.
 # Members
 - `header`: a `NIfTI1Header`
 - `extensions`: a Vector of `NIfTIExtension`s 
-- `raw`: Raw data of type `R` from the volume
+- `raw`: Raw data of type `R`
 """
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
@@ -135,6 +133,8 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
 
+
+header(x::NIVolume) = getfield(x, :header)
 
 include("coordinates.jl")
 
@@ -391,7 +391,7 @@ add1(::Colon) = Colon()
     vox(f::NIVolume, args...,)
 
 Get the value of a voxel from volume `f`, scaled by slope and intercept given in header, with 0-based indexing.
-The length of `args` should be the number of dimensions in `f`.
+`args` are the voxel indices and the length should be the number of dimensions in `f`.
 """
 @inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
 
@@ -402,4 +402,3 @@ length(f::NIVolume) = length(f.raw)
 lastindex(f::NIVolume) = lastindex(f.raw)
 
 end
-
