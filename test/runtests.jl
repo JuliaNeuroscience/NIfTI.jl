@@ -93,6 +93,13 @@ const TEMP_GZIPPED_FILE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii.gz")
 niwrite(TEMP_GZIPPED_FILE, vol)
 niread(TEMP_GZIPPED_FILE)
 
+# Test new_img_like
+img = niread(GZIPPED_NII)
+test_raw = ones(size(img))
+new_img = new_vol_like(img, test_raw)
+@test new_img.header == img.header
+@test new_img.raw == test_raw
+
 # Write and read DT_BINARY
 const BOOL_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const BIT_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
