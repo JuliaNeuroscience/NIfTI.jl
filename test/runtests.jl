@@ -99,6 +99,7 @@ test_raw = ones(size(img))
 new_img = new_vol_like(img, test_raw)
 @test new_img.header == img.header
 @test new_img.raw == test_raw
+@test new_img.extensions == img.extensions 
 
 # Write and read DT_BINARY
 const BOOL_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
