@@ -107,6 +107,17 @@ function byteswap(hdr::NIfTI1Header)
     hdr
 end
 
+"""
+    NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+An `N`-dimensional NIfTI volume, with raw data of type 
+`R`. Note that if `R <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
+updated to be consistent with the raw volume. 
+
+# Members
+- `header`: a `NIfTI1Header`
+- `extensions`: a Vector of `NIfTIExtension`s 
+- `raw`: Raw data of type `R`
+"""
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTIExtension}
@@ -127,11 +138,21 @@ NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
 
 include("coordinates.jl")
 
-# Always in mm
+
+"""
+    voxel_size(header::NIfTI1Header)
+
+Get the voxel size **in mm** from a `NIfTI1Header`.
+"""
 voxel_size(header::NIfTI1Header) =
     [header.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & Int8(3)] for i = 2:min(header.dim[1], 3)+1]
 
 # Always in ms
+"""
+    time_step(header::NIfTI1Header)
+
+Get the TR **in ms** from a `NIfTI1Header`.
+"""
 time_step(header::NIfTI1Header) =
     header.pixdim[5] * TIME_UNIT_MULTIPLIERS[header.xyzt_units >> 3]
 
@@ -285,7 +306,11 @@ function write(io::IO, vol::NIVolume)
     end
 end
 
-# Convenience function to write a NIfTI file given a path
+"""
+    niwrite(path::AbstractString, vol::NIVolume)   
+
+Write a NIVolume to a file specified by `path`.
+"""
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
         io = open(path, "w")
@@ -323,6 +348,11 @@ function isgz(io::IO)
     end 
 end
 
+"""
+    niread(file; mmap=false, mode="r")
+
+Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
+"""
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
@@ -347,7 +377,15 @@ end
 
 add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
+
+"""
+    vox(f::NIVolume, args...,)
+
+Get the value of a voxel from volume `f`, scaled by slope and intercept given in header, with 0-based indexing.
+`args` are the voxel indices and the length should be the number of dimensions in `f`.
+"""
 @inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
+
 size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
