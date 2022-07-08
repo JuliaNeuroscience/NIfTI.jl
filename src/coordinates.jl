@@ -75,10 +75,19 @@ function get_qform(hdr::NIfTI1Header)
         ]
     end
 end
+"""
+    getaffine(x::NIVolume)
 
+Gets a 4x4 affine transformation volume's header's sform
+"""
 getaffine(x::NIVolume) = getaffine(x.header)
 
 # Convert a NIfTI header to a 4x4 affine transformation matrix
+"""
+    getaffine(hdr::NIfTI1Header)
+
+Gets a 4x4 affine transformation matrix from a header's sform
+"""
 function getaffine(hdr::NIfTI1Header)
     if hdr.sform_code > 0
         return get_sform(hdr)
@@ -87,7 +96,11 @@ function getaffine(hdr::NIfTI1Header)
     end
 end
 
-# Set affine matrix of NIfTI header
+"""
+    function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
+
+Set the affine of a `NIfTI1Header` to 4x4 affine matrix `affine`
+"""
 function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
     size(affine, 1) == size(affine, 2) == 4 ||
         error("affine matrix must be 4x4")
