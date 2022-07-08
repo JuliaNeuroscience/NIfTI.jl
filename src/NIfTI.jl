@@ -1,6 +1,3 @@
-# NIfTI.jl
-# Methods for reading NIfTI MRI files in Julia
-
 module NIfTI
 
 using CodecZlib, Mmap, MappedArrays, TranscodingStreams
@@ -11,102 +8,19 @@ export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffi
 include("parsers.jl")
 include("extensions.jl")
 include("volume.jl")
+include("headers.jl")
 
-function define_packed(ty::DataType)
-    packed_offsets = cumsum([sizeof(x) for x in ty.types])
-    sz = pop!(packed_offsets)
-    pushfirst!(packed_offsets, 0)
+"""
+    NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
+An `N`-dimensional NIfTI volume, with raw data of type 
+`R`. Note that if `R <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
+updated to be consistent with the raw volume. 
 
-    @eval begin
-        function Base.read(io::IO, ::Type{$ty})
-            bytes = read!(io, Array{UInt8}(undef, $sz...))
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
-            if hdr.sizeof_hdr == ntoh(Int32(348))
-                return byteswap(hdr), true
-            end
-            hdr, false
-        end
-        function Base.write(io::IO, x::$ty)
-            bytes = UInt8[]
-            for name in fieldnames($ty)
-                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
-            end
-            write(io, bytes)
-            $sz
-        end
-    end
-    nothing
-end
-
-mutable struct NIfTI1Header
-    sizeof_hdr::Int32
-
-    data_type::NTuple{10,UInt8}
-    db_name::NTuple{18,UInt8}
-    extents::Int32
-    session_error::Int16
-    regular::Int8
-
-    dim_info::Int8
-    dim::NTuple{8,Int16}
-    intent_p1::Float32
-    intent_p2::Float32
-    intent_p3::Float32
-    intent_code::Int16
-    datatype::Int16
-    bitpix::Int16
-    slice_start::Int16
-    pixdim::NTuple{8,Float32}
-    vox_offset::Float32
-    scl_slope::Float32
-    scl_inter::Float32
-    slice_end::Int16
-    slice_code::Int8
-    xyzt_units::Int8
-    cal_max::Float32
-    cal_min::Float32
-    slice_duration::Float32
-    toffset::Float32
-
-    glmax::Int32
-    glmin::Int32
-
-    descrip::NTuple{80,UInt8}
-    aux_file::NTuple{24,UInt8}
-
-    qform_code::Int16
-    sform_code::Int16
-    quatern_b::Float32
-    quatern_c::Float32
-    quatern_d::Float32
-    qoffset_x::Float32
-    qoffset_y::Float32
-    qoffset_z::Float32
-
-    srow_x::NTuple{4,Float32}
-    srow_y::NTuple{4,Float32}
-    srow_z::NTuple{4,Float32}
-
-    intent_name::NTuple{16,UInt8}
-
-    magic::NTuple{4,UInt8}
-end
-define_packed(NIfTI1Header)
-
-# byteswapping
-
-function byteswap(hdr::NIfTI1Header)
-    for fn in fieldnames(typeof(hdr))
-        val = getfield(hdr, fn)
-        if isa(val, Number) && sizeof(val) > 1
-            setfield!(hdr, fn, ntoh(val))
-        elseif isa(val, NTuple) && sizeof(eltype(val)) > 1
-            setfield!(hdr, fn, map(ntoh, val))
-        end
-    end
-    hdr
-end
-
+# Members
+- `header`: a `NIfTI1Header`
+- `extensions`: a Vector of `NIfTIExtension`s 
+- `raw`: Raw data of type `R`
+"""
 struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
     header::NIfTI1Header
     extensions::Vector{NIfTIExtension}
@@ -125,13 +39,25 @@ NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
 
 
+header(x::NIVolume) = getfield(x, :header)
+
 include("coordinates.jl")
 
-# Always in mm
+
+"""
+    voxel_size(header::NIfTI1Header)
+
+Get the voxel size **in mm** from a `NIfTI1Header`.
+"""
 voxel_size(header::NIfTI1Header) =
     [header.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & Int8(3)] for i = 2:min(header.dim[1], 3)+1]
 
 # Always in ms
+"""
+    time_step(header::NIfTI1Header)
+
+Get the TR **in ms** from a `NIfTI1Header`.
+"""
 time_step(header::NIfTI1Header) =
     header.pixdim[5] * TIME_UNIT_MULTIPLIERS[header.xyzt_units >> 3]
 
@@ -285,7 +211,11 @@ function write(io::IO, vol::NIVolume)
     end
 end
 
-# Convenience function to write a NIfTI file given a path
+"""
+    niwrite(path::AbstractString, vol::NIVolume)   
+
+Write a NIVolume to a file specified by `path`.
+"""
 function niwrite(path::AbstractString, vol::NIVolume)
     if split(path,".")[end] == "gz"
         io = open(path, "w")
@@ -323,6 +253,11 @@ function isgz(io::IO)
     end 
 end
 
+"""
+    niread(file; mmap=false, mode="r")
+
+Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
+"""
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
@@ -347,7 +282,15 @@ end
 
 add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
+
+"""
+    vox(f::NIVolume, args...,)
+
+Get the value of a voxel from volume `f`, scaled by slope and intercept given in header, with 0-based indexing.
+`args` are the voxel indices and the length should be the number of dimensions in `f`.
+"""
 @inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
+
 size(f::NIVolume) = size(f.raw)
 size(f::NIVolume, d) = size(f.raw, d)
 ndims(f::NIVolume) = ndims(f.raw)
@@ -355,4 +298,3 @@ length(f::NIVolume) = length(f.raw)
 lastindex(f::NIVolume) = lastindex(f.raw)
 
 end
-
