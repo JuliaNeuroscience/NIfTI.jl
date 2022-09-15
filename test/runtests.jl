@@ -103,6 +103,12 @@ niwrite(BIT_WRITE, NIVolume(mask_bitarray))
 @test niread(BOOL_WRITE).raw == mask
 @test niread(BIT_WRITE).raw == mask_bitarray
 
+# Write and read INT16 volume
+const INT16_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
+vol_INT16 = rand(Int16, 3, 5, 7) # Array{Int16}
+niwrite(INT16_WRITE, NIVolume(vol_INT16))
+@test niread(INT16_WRITE).raw == vol_INT16
+
 # Open mmaped file for reading and writing
 const WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const VERIFY_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
