@@ -283,9 +283,9 @@ end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data
 @inline getindex(f::NIVolume{T}, idx::Vararg{Int}) where {T} =
-    f.header.scl_slope == zero(typeof(f.header.scl_slope)) ? 
-    getindex(f.raw, idx...,) :
-    getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
+    f.header.scl_slope == zero(typeof(f.header.scl_slope)) ?
+        getindex(f.raw, idx...,) :
+        getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
 
 add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
