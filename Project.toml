@@ -5,13 +5,16 @@ version = "0.5.9"
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 MappedArrays = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
+MetadataArrays = "49441bc9-da82-574f-b07c-a0d10dd4ac13"
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 
 [compat]
 CodecZlib = "0.7"
 MappedArrays = "0.3,0.4"
+MetadataArrays = "0.1"
 TranscodingStreams = "0.9"
 julia = "1.3"
 

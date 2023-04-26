@@ -1,61 +1,150 @@
 module NIfTI
 
-using CodecZlib, Mmap, MappedArrays, TranscodingStreams
+using CodecZlib
+using FileIO
+using Mmap
+using MappedArrays
+using MetadataArrays
+using TranscodingStreams
 
-import Base.getindex, Base.size, Base.ndims, Base.length, Base.write, Base64
-export NIVolume, niread, niwrite, voxel_size, time_step, vox, getaffine, setaffine
+import Base.write, Base64
 
+const SIZEOF_HDR1 = Int32(348)
+const SIZEOF_HDR2 = Int32(540)
+
+const NP1_MAGIC = (0x6e,0x2b,0x31,0x00)
+const NI1_MAGIC = (0x6e,0x69,0x31,0x00)
+const NP2_MAGIC = (0x6e,0x2b,0x32,0x00,0x0d,0x0a,0x1a,0x0a)
+const NI2_MAGIC = (0x6e,0x69,0x32,0x00,0x0d,0x0a,0x1a,0x0a)
+
+_bswap(x) = bswap(x)
+_bswap(x::Tuple) = map(bswap, x)
+
+struct NIfTI1Header
+    data_type::NTuple{10,UInt8}  # unused
+    db_name::NTuple{18,UInt8}  # unused
+    extents::Int32  # unused
+    session_error::Int16  # unused
+    regular::Int8  # unused
+
+    dim_info::Int8
+    dim::NTuple{8,Int16}
+    intent_parameters::NTuple{3, Float32}
+    intent_code::Int16
+    datatype::Int16
+    bitpix::Int16
+    slice_start::Int16
+    pixdim::NTuple{8,Float32}
+    vox_offset::Float32
+    scl_slope::Float32
+    scl_inter::Float32
+    slice_end::Int16
+    slice_code::Int8
+    xyzt_units::Int8
+    cal_max::Float32
+    cal_min::Float32
+    slice_duration::Float32
+    toffset::Float32
+
+    glmax::Int32
+    glmin::Int32
+
+    descrip::NTuple{80,UInt8}
+    aux_file::NTuple{24,UInt8}
+
+    qform_code::Int16
+    sform_code::Int16
+    quatern_b::Float32
+    quatern_c::Float32
+    quatern_d::Float32
+    qoffset_x::Float32
+    qoffset_y::Float32
+    qoffset_z::Float32
+
+    srow_x::NTuple{4, Float32}
+    srow_y::NTuple{4, Float32}
+    srow_z::NTuple{4, Float32}
+
+    intent_name::NTuple{16, UInt8}
+
+    magic::NTuple{4,UInt8}
+end
+
+struct NIfTI2Header
+    magic::NTuple{8,UInt8}
+    datatype::Int16
+    bitpix::Int16
+    dim::NTuple{8,Int64}
+    intent_parameters::NTuple{3, Float64}
+    pixdim::NTuple{8, Float64}
+    vox_offset::Int64
+    scl_slope::Float64
+    scl_inter::Float64
+    cal_max::Float64
+    cal_min::Float64
+    slice_duration::Float64
+    toffset::Float64
+    slice_start::Int64
+    slice_end::Int64
+    descrip::NTuple{80,UInt8}
+    aux_file::NTuple{24,UInt8}
+    qform_code::Int32
+    sform_code::Int32
+    quatern_b::Float64
+    quatern_c::Float64
+    quatern_d::Float64
+    qoffset_x::Float64
+    qoffset_y::Float64
+    qoffset_z::Float64
+    srow_x::NTuple{4, Float64}
+    srow_y::NTuple{4, Float64}
+    srow_z::NTuple{4, Float64}
+    slice_code::Int32
+    xyzt_units::Int32
+    intent_code::Int32
+    intent_name::NTuple{16, UInt8}
+    dim_info::UInt8
+    unused_str::NTuple{15, UInt8}
+end
+
+const NIfTIHeader = Union{NIfTI1Header, NIfTI2Header}
+
+function define_read_header()
+    packed_offsets1 = cumsum([sizeof(x) for x in NIfTI1Header.types])
+    sz1 = pop!(packed_offsets1)
+    pushfirst!(packed_offsets1, 0)
+
+    packed_offsets2 = cumsum([sizeof(x) for x in NIfTI2Header.types])
+    sz2 = pop!(packed_offsets2)
+    pushfirst!(packed_offsets2, 0)
+
+    @eval begin
+        function read_header(io::IO, v::Int, swap::Bool)
+            if v === 1
+                bytes = read!(io, Array{UInt8}(undef, $sz1...))
+                if swap
+                    hdr = $(Expr(:new, NIfTI1Header, [:(_bswap(unsafe_load(convert(Ptr{$(NIfTI1Header.types[i])}, pointer(bytes)+$(packed_offsets1[i]))))) for i = 1:length(packed_offsets1)]...,))
+                else
+                    hdr = $(Expr(:new, NIfTI1Header, [:(unsafe_load(convert(Ptr{$(NIfTI1Header.types[i])}, pointer(bytes)+$(packed_offsets1[i])))) for i = 1:length(packed_offsets1)]...,))
+                end
+            else
+                bytes = read!(io, Array{UInt8}(undef, $sz2...))
+                if swap
+                    hdr = $(Expr(:new, NIfTI2Header, [:(_bswap(unsafe_load(convert(Ptr{$(NIfTI2Header.types[i])}, pointer(bytes)+$(packed_offsets2[i]))))) for i = 1:length(packed_offsets2)]...,))
+                else
+                    hdr = $(Expr(:new, NIfTI2Header, [:(unsafe_load(convert(Ptr{$(NIfTI2Header.types[i])}, pointer(bytes)+$(packed_offsets2[i])))) for i = 1:length(packed_offsets2)]...,))
+                end
+            end
+        end
+    end
+end
+define_read_header()
+
+include("intent.jl")
 include("parsers.jl")
 include("extensions.jl")
-include("volume.jl")
 include("headers.jl")
-
-"""
-    NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
-An `N`-dimensional NIfTI volume, with raw data of type 
-`R`. Note that if `R <: Number`, it will be converted to `Float32`. Additionally, the header is automatically
-updated to be consistent with the raw volume. 
-
-# Members
-- `header`: a `NIfTI1Header`
-- `extensions`: a Vector of `NIfTIExtension`s 
-- `raw`: Raw data of type `R`
-"""
-struct NIVolume{T<:Number,N,R} <: AbstractArray{T,N}
-    header::NIfTI1Header
-    extensions::Vector{NIfTIExtension}
-    raw::R
-end
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::R) where {R}=
-    niupdate(new(header, extensions, raw))
-
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{T,N}) where {T<:Number,N} =
-    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
-NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
-    NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTIExtension[], raw)
-
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Int16,N}) where {N} =
-    NIVolume{Int16,N,typeof(raw)}(header, extensions, raw)
-NIVolume(header::NIfTI1Header, raw::AbstractArray{Int16,N}) where {N} =
-    NIVolume{Int16,N,typeof(raw)}(header, NIfTIExtension[], raw)
-
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Bool,N}) where {N} =
-    NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
-NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
-    NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
-
-header(x::NIVolume) = getfield(x, :header)
-
 include("coordinates.jl")
-
-
-"""
-    voxel_size(header::NIfTI1Header)
-
-Get the voxel size **in mm** from a `NIfTI1Header`.
-"""
-voxel_size(header::NIfTI1Header) =
-    [header.pixdim[i] * SPATIAL_UNIT_MULTIPLIERS[header.xyzt_units & Int8(3)] for i = 2:min(header.dim[1], 3)+1]
 
 # Always in ms
 """
@@ -66,142 +155,52 @@ Get the TR **in ms** from a `NIfTI1Header`.
 time_step(header::NIfTI1Header) =
     header.pixdim[5] * TIME_UNIT_MULTIPLIERS[header.xyzt_units >> 3]
 
-function to_dim_info(dim_info::Tuple{Integer,Integer,Integer})
-    if dim_info[1] > 3 || dim_info[1] < 0
-        error("Invalid frequency dimension $(dim_info[1])")
-    elseif dim_info[2] > 3 || dim_info[2] < 0
-        error("Invalid phase dimension $(dim_info[2])")
-    elseif dim_info[3] > 3 || dim_info[3] < 0
-        error("Invalid slice dimension $(dim_info[3])")
-    end
-
-    return Int8(dim_info[1] | (dim_info[2] << 2) | (dim_info[3] << 4))
-end
-
-# Returns or sets dim_info as a tuple whose values are the frequency, phase, and slice dimensions
-function dim_info(header::NIfTI1Header)
-    return (
-        header.dim_info & int8(3),
-        (header.dim_info >> 2) & int8(3),
-        (header.dim_info >> 4) & int8(3)
-    )
-end
-function dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer}
-    header.dim_info = to_dim_info(dim_info)
-end
-
 # Gets the size of a type in bits
 nibitpix(t::Type) = Int16(sizeof(t)*8)
 nibitpix(::Type{Bool}) = Int16(1)
 
-# Constructor
-function NIVolume(
-    # Optional MRI volume; if not given, an empty volume is used
-    raw::AbstractArray{T}=Int16[],
-    extensions::Union{Vector{NIfTIExtension},Nothing}=nothing;
-
-    # Fields specified as UNUSED in NIfTI1 spec
-    data_type::AbstractString="", db_name::AbstractString="", extents::Integer=Int32(0),
-    session_error::Integer=Int16(0), regular::Integer=Int8(0), glmax::Integer=Int32(0),
-    glmin::Integer=Int16(0),
-
-    # The frequency encoding, phase encoding and slice dimensions.
-    dim_info::NTuple{3, Integer}=(0, 0, 0),
-    # Describes data contained in the file; for valid values, see
-    # http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/group__NIfTI1__INTENT__CODES.html
-    intent_p1::Real=0f0, intent_p2::Real=0f0, intent_p3::Real=0f0,
-    intent_code::Integer=Int16(0), intent_name::AbstractString="",
-    # Information about which slices were acquired, in case the volume has been padded
-    slice_start::Integer=Int16(0), slice_end::Integer=Int16(0), slice_code::Int8=Int8(0),
-    # The size of each voxel and the time step. These are formulated in mm unless xyzt_units is
-    # explicitly specified
-    voxel_size::NTuple{3, Real}=(1f0, 1f0, 1f0), time_step::Real=0f0, xyzt_units::Int8=Int8(18),
-    # Slope and intercept by which volume shoudl be scaled
-    scl_slope::Real=1f0, scl_inter::Real=0f0,
-    # These describe how data should be scaled when displayed on the screen. They are probably
-    # rarely used
-    cal_max::Real=0f0, cal_min::Real=0f0,
-    # The amount of time taken to acquire a slice
-    slice_duration::Real=0f0,
-    # Indicates a non-zero start point for time axis
-    toffset::Real=0f0,
-
-    # "Any text you like"
-    descrip::AbstractString="",
-    # Name of auxiliary file
-    aux_file::AbstractString="",
-
-    # Parameters for Method 2. See the NIfTI spec
-    qfac::Float32=0f0, quatern_b::Real=0f0, quatern_c::Real=0f0, quatern_d::Real=0f0,
-    qoffset_x::Real=0f0, qoffset_y::Real=0f0, qoffset_z::Real=0f0,
-    # Orientation matrix for Method 3
-    orientation::Union{Matrix{Float32},Nothing}=nothing) where {T <: Number}
-    local t
-    if isempty(raw)
-        raw = Int16[]
-        t = Int16
-    else
-        t = T
-    end
-
-    if extensions == nothing
-        extensions = NIfTIExtension[]
-    end
-
-    method2 = qfac != 0 || quatern_b != 0 || quatern_c != 0 || quatern_d != 0 || qoffset_x != 0 ||
-        qoffset_y != 0 || qoffset_z != 0
-    method3 = orientation != nothing
-
-    if method2 && method3
-        error("Orientation parameters for Method 2 and Method 3 are mutually exclusive")
-    end
-
-    if method3
-        if size(orientation) != (3, 4)
-            error("Orientation matrix must be of dimensions (3, 4)")
-        end
-    else
-        orientation = zeros(Float32, 3, 4)
-    end
-
-    if slice_start == 0 && slice_end == 0 && dim_info[3] != 0
-        slice_start = 0
-        slice_end = size(raw, dim_info[3]) - 1
-    end
-
-    NIVolume(NIfTI1Header(SIZEOF_HDR1, string_tuple(data_type, 10), string_tuple(db_name, 18), extents, session_error,
-        regular, to_dim_info(dim_info), to_dim_i16(size(raw)), intent_p1, intent_p2,
-        intent_p3, intent_code, eltype_to_int16(t), nibitpix(t),
-        slice_start, (qfac, voxel_size..., time_step, 0, 0, 0), 352,
-        scl_slope, scl_inter, slice_end, slice_code,
-        xyzt_units, cal_max, cal_min, slice_duration,
-        toffset, glmax, glmin, string_tuple(descrip, 80), string_tuple(aux_file, 24), (method2 || method3),
-        method3, quatern_b, quatern_c, quatern_d,
-        qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
-        (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
-end
-
-# Validates the header of a volume and updates it to match the volume's contents
-function niupdate(vol::NIVolume{T}) where {T}
-    vol.header.sizeof_hdr = SIZEOF_HDR1
-    vol.header.dim = to_dim_i16(size(vol.raw))
-    vol.header.datatype = eltype_to_int16(T)
-    vol.header.bitpix = nibitpix(T)
-    vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
-        Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
-    vol
-end
-
 # Avoid method ambiguity
-write(io::Base64.Base64EncodePipe, vol::NIVolume{UInt8,1}) = invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
+# function write(io::Base64.Base64EncodePipe, vol::NIVolume{UInt8,1})
+#     invoke(write, (IO, NIVolume{UInt8,1}), io, vol)
+# end
 
-# Write a NIfTI file
-function write(io::IO, vol::NIVolume)
-    write(io, niupdate(vol).header)
-    if isempty(vol.extensions)
+"""
+    NIfTI.save(path::AbstractString, img::AbstractArray)
+
+Write `img` to a NIfTI file at the specified `path`.
+"""
+function save(f::AbstractString, img; kwargs...)
+    save(File{format"NII"}(f), img; kwargs...)
+end
+function save(f::File{format"NII"}, img; kwargs...)
+    open(f, "w") do io
+        save(io, img; kwargs...)
+    end
+end
+function save(io::Stream, img; kwargs...)
+    exts = extensions(img)
+    hdr_version = 1
+    if hdr_version === 1
+        bytes = UInt8[]
+        write(io, SIZEOF_HDR1)
+        hdr = NIfTI1Header(img; kwargs...)
+        for name in fieldnames(NIfTI1Header)
+            append!(bytes, reinterpret(UInt8, [getfield(hdr, name)]))
+        end
+        write(io, bytes)
+    else
+        bytes = UInt8[]
+        write(io, SIZEOF_HDR2)
+        hdr = NIfTI2Header(img; kwargs...)
+        for name in fieldnames(NIfTI1Header)
+            append!(bytes, reinterpret(UInt8, [getfield(hdr, name)]))
+        end
+        write(io, bytes)
+    end
+    if isempty(exts)
         write(io, Int32(0))
     else
-        for ex in vol.extensions
+        for ex in exts
             sz = esize(ex)
             write(io, Int32(sz))
             write(io, Int32(ex.ecode))
@@ -209,99 +208,113 @@ function write(io::IO, vol::NIVolume)
             write(io, zeros(UInt8, sz - length(ex.edata)))
         end
     end
-    if eltype(vol.raw) == Bool
-        write(io, BitArray(vol.raw))
-    else
-        write(io, vol.raw)
-    end
-end
-
-"""
-    niwrite(path::AbstractString, vol::NIVolume)   
-
-Write a NIVolume to a file specified by `path`.
-"""
-function niwrite(path::AbstractString, vol::NIVolume)
-    if split(path,".")[end] == "gz"
-        io = open(path, "w")
-        stream = GzipCompressorStream(io)
-        write(stream, vol)
-        close(stream)
-        close(io)
-    else
-        io = open(path, "w")
-        write(io, vol)
-        close(io)
-    end
-end
-
-# Read header from a NIfTI file
-function read_header(io::IO)
-    header, swapped = read(io, NIfTI1Header)
-    if header.sizeof_hdr != SIZEOF_HDR1
-        error("This is not a NIfTI-1 file")
-    end
-    header, swapped
-end
-
-# Look for a gzip header in an IOStream
-function isgz(io::IO)
-    try
-        ret = read(io, UInt8) == 0x1F && read(io, UInt8) == 0x8B
-        seekstart(io)
-        ret
-    catch err
-        if isa(err, EOFError)
-            @debug "reading the file resulted in an EOF error and \nthe end of the file was read.\nNo more data was available to read from the filestream.\nIt is likely that the file was corrupted or is empty (0 bytes)."
-            rethrow(err)
+    T = to_eltype(hdr)
+    if eltype(img) <: T
+        if T <: Bool
+            write(io, BitArray(img))
+        else
+            write(io, img)
         end
-    end 
+    else
+        for v in img
+            write(io, convert(T, v))
+        end
+    end
+    nothing
 end
 
 """
-    niread(file; mmap=false, mode="r")
+    NIfTI.load(file, mode::AbstractString="r"; mmap=false, scale=false)
 
-Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
+Read a NIfTI file to an array. Set `mmap=true` to memory map the volume.
 """
-function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
-    io = niopen(file, mode)
-    hdr, swapped = read_header(io)
-    ex = read_extensions(io, hdr.vox_offset - 352)
-
-    if hdr.magic === NP1_MAGIC
-        vol = read_volume(io, to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
-    else
-        vol = read_volume(niopen(hdr_to_img(file), mode), to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
-    end
-
-    if swapped && sizeof(eltype(vol)) > 1
-        return NIVolume(hdr, ex, mappedarray(ntoh, hton, vol))
-    else
-        return NIVolume(hdr, ex, vol)
+function load(f::AbstractString, mode::AbstractString="r"; mmap::Bool=false, scale::Bool=false)
+    open(f, mode) do io
+        load(Stream{format"NII"}(splitext(f)[end] == ".gz" ? GzipDecompressorStream(io) : io, f); mmap=mmap, scale=scale)
     end
 end
+function load(f::File{format"NII"}, mode::AbstractString="r"; mmap::Bool=false, scale::Bool=false)
+    open(f, mode) do io
+        load(io; mmap=mmap, scale=scale)
+    end
+end
+function load(s::Stream{format"NII"}; mmap::Bool=false, scale::Bool=false)
+    io = stream(s)
+    hdr_size = read(io, Int32)
+    if hdr_size === SIZEOF_HDR1
+        v = 1
+        swapped = false
+    elseif hdr_size === SIZEOF_HDR2
+        v = 2
+        swapped = false
+    else
+        hdr_size = bswap(hdr_size)
+        if hdr_size === SIZEOF_HDR1
+            v = 1
+            swapped = true
+        elseif hdr_size === SIZEOF_HDR
+            v = 2
+            swapped = true
+        else
+            error("This is not a NIfTI-1 file")
+        end
+    end
+    hdr = read_header(io, v, swapped)
+    isgzipped = io isa GzipDecompressorStream
+    isgzipped && mmap && error("cannot mmap a gzipped NIfTI file")
+    scale && mmap && throw(ArgumentError("Cannot scale mapped data"))
+    offset = hdr.vox_offset - 352
+    exts = Extension[]
+    if !eof(io)
+        b1 = read(io, UInt8)
+        # GZIP doesn't skip so we read and throw away
+        read(io, UInt8)
+        read(io, UInt8)
+        read(io, UInt8)
+        if b1 !== UInt8(0)
+            counter = 0
+            while counter < (n - 1)
+                esize = read(io, Int32)
+                ec = read(io, Int32)
+                data_i = Array{UInt8}(undef, esize - 8)
+                read!(io, data_i)
+                push!(exts, Extension(ec, data_i))
+                counter += esize
+            end
+        end
+    end
 
-# Allow file to be indexed like an array, but with indices yielding scaled data
-@inline getindex(f::NIVolume{T}, idx::Vararg{Int}) where {T} =
-    f.header.scl_slope == zero(typeof(f.header.scl_slope)) ?
-        getindex(f.raw, idx...,) :
-        getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
+    T = to_eltype(hdr.datatype)
 
-add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
-add1(::Colon) = Colon()
+    dimensions = hdr.dim
+    N = Int(getfield(dimensions, 1))
+    sz = ntuple(i -> getfield(dimensions, i + 1), N)
 
-"""
-    vox(f::NIVolume, args...,)
+    if (v === 1 && hdr.magic === NP1_MAGIC) || hdr.mage === NP2_MAGIC
+        volio = io
+    else
+        volio = hdr_to_img(filename(io))
+    end
+    ArrayType = T === Bool ? BitArray{N} : Array{T,N}
+    vol = mmap ? Mmap.mmap(io, ArrayType, sz) : read!(io, ArrayType(undef, sz))
+    if swapped
+        vol = mappedarray(bswap, vol)
+    end
 
-Get the value of a voxel from volume `f`, scaled by slope and intercept given in header, with 0-based indexing.
-`args` are the voxel indices and the length should be the number of dimensions in `f`.
-"""
-@inline vox(f::NIVolume, args...,) = getindex(f, map(add1, args)...,)
-
-size(f::NIVolume) = size(f.raw)
-size(f::NIVolume, d) = size(f.raw, d)
-ndims(f::NIVolume) = ndims(f.raw)
-length(f::NIVolume) = length(f.raw)
-lastindex(f::NIVolume) = lastindex(f.raw)
+    if scale && hdr.scl_slope != 0
+        slope = hdr.scl_slope
+        inter = hdr.scl_inter
+        if swapped && sizeof(T) > 1
+            vol .= slope .* bswap.(vol) .+ inter
+        else
+            vol .= slope .* vol .+ inter
+        end
+        return MetadataArray(vol, (header=hdr, extension=exts))
+    elseif swapped && sizeof(eltype(vol)) > 1
+        return MetadataArray(mappedarray(ntoh, hton, vol), (header=hdr, extension=exts))
+    else
+        return MetadataArray(vol, (header=hdr, extension=exts))
+    end
+end
 
 end

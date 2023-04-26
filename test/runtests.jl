@@ -17,7 +17,7 @@ const TEMP_DIR_NAME = mktempdir()
 
 # empty file test
 const EMPTY_NII = joinpath(dirname(@__FILE__), "data/empty.nii.gz")
-@test_throws EOFError niread(EMPTY_NII)
+@test_throws EOFError NIfTI.load(EMPTY_NII)
 
 # single file storage
 const GZIPPED_NII = joinpath(dirname(@__FILE__), "data/example4d.nii.gz")
@@ -33,7 +33,7 @@ extractto(GZIPPED_HDR, HDR)
 extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
 function image_tests(fname, mmap)
-    img = niread(fname, mmap=mmap)
+    img = NIfTI.load(fname, mmap=mmap)
 
     # Header
     @test time_step(img.header) == 2000000 # Actually an error in the file AFAIK
@@ -71,7 +71,7 @@ image_tests(GZIPPED_NII, false)
 image_tests(GZIPPED_HDR, false)
 
 @testset "Header Field Accessors" begin
-    img = niread(GZIPPED_NII)
+    img = NIfTI.load(GZIPPED_NII)
     @test NIfTI.freqdim(img) == 1
     @test NIfTI.phasedim(img) == 2
     @test NIfTI.slicedim(img) == 3
@@ -80,50 +80,50 @@ image_tests(GZIPPED_HDR, false)
     @test NIfTI.slice_duration(img) == 0
 end
 
-@test_throws ErrorException niread(GZIPPED_NII; mmap=true)
-@test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
+@test_throws ErrorException NIfTI.load(GZIPPED_NII; mmap=true)
+@test_throws ErrorException NIfTI.load(GZIPPED_HDR; mmap=true)
 
 # Test writing
 const TEMP_FILE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 vol = NIVolume()
-niwrite(TEMP_FILE, vol)
-niread(TEMP_FILE)
+NIfTI.save(TEMP_FILE, vol)
+NIfTI.load(TEMP_FILE)
 
 const TEMP_GZIPPED_FILE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii.gz")
-niwrite(TEMP_GZIPPED_FILE, vol)
-niread(TEMP_GZIPPED_FILE)
+NIfTI.save(TEMP_GZIPPED_FILE, vol)
+NIfTI.load(TEMP_GZIPPED_FILE)
 
 # Write and read DT_BINARY
 const BOOL_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const BIT_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 mask = rand(Bool, 3, 5, 7) # Array{Bool}
 mask_bitarray = BitArray(mask) # BitArray
-niwrite(BOOL_WRITE, NIVolume(mask))
-niwrite(BIT_WRITE, NIVolume(mask_bitarray))
-@test niread(BOOL_WRITE).raw == mask
-@test niread(BIT_WRITE).raw == mask_bitarray
+NIfTI.save(BOOL_WRITE, NIVolume(mask))
+NIfTI.save(BIT_WRITE, NIVolume(mask_bitarray))
+@test NIfTI.load(BOOL_WRITE).raw == mask
+@test NIfTI.load(BIT_WRITE).raw == mask_bitarray
 
 # Write and read INT16 volume
 const INT16_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 vol_INT16 = rand(Int16, 3, 5, 7) # Array{Int16}
-niwrite(INT16_WRITE, NIVolume(vol_INT16))
-@test niread(INT16_WRITE).raw == vol_INT16
+NIfTI.save(INT16_WRITE, NIVolume(vol_INT16))
+@test NIfTI.load(INT16_WRITE).raw == vol_INT16
 
 # Open mmaped file for reading and writing
 const WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const VERIFY_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 cp(NII, WRITE)
-img = niread(WRITE; mmap=true, mode="r+")
+img = NIfTI.load(WRITE; mmap=true, mode="r+")
 img.raw[1,1,1,1] = 5
 img.raw[:,2,1,1] = ones(size(img)[1])
 cp(WRITE, VERIFY_WRITE)
-@test niread(VERIFY_WRITE)[1,1,1,1] == 5
-@test niread(VERIFY_WRITE)[:,2,1,1] == ones(size(img)[1])
+@test NIfTI.load(VERIFY_WRITE)[1,1,1,1] == 5
+@test NIfTI.load(VERIFY_WRITE)[:,2,1,1] == ones(size(img)[1])
 # Site is currently down TODO: reintroduce this test when site is up
 # Big endian
 # const BE = "$(tempname()).nii"
 # download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
-img = niread(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
+img = NIfTI.load(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
 @test size(img) == (91,109,91)
 
 GC.gc() # closes mmapped files

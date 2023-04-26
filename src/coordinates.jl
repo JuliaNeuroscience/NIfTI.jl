@@ -18,9 +18,8 @@ end
            (x31 * y13 + x32 * y23 + x33 * y33)    # z33
 end
 
-get_sform(x::NIVolume) = get_sform(x.header)
-function get_sform(hdr::NIfTI1Header)
-    if hdr.sform_code > 0
+function get_sform(x)
+    if sform_code(x) > 0
         return @inbounds Float32[
             hdr.srow_x[1]  hdr.srow_x[2]  hdr.srow_x[3]  hdr.srow_x[4]
             hdr.srow_y[1]  hdr.srow_y[2]  hdr.srow_y[3]  hdr.srow_y[4]
@@ -33,9 +32,8 @@ function get_sform(hdr::NIfTI1Header)
     end
 end
 
-get_qform(x::NIVolume) = get_qform(x.header)
-function get_qform(hdr::NIfTI1Header)
-    if hdr.qform_code <= 0
+function get_qform(x)
+    if qform_code(x) <= 0
         return @inbounds Float32[
             hdr.pixdim[2]   0              0              0
             0               hdr.pixdim[3]  0              0
@@ -75,25 +73,15 @@ function get_qform(hdr::NIfTI1Header)
         ]
     end
 end
+
+# FIXME turn this into a metadata term
 """
-    getaffine(x::NIVolume)
+    getaffine(img)
 
 Gets a 4x4 affine transformation volume's header's sform
 """
-getaffine(x::NIVolume) = getaffine(x.header)
-
-# Convert a NIfTI header to a 4x4 affine transformation matrix
-"""
-    getaffine(hdr::NIfTI1Header)
-
-Gets a 4x4 affine transformation matrix from a header's sform
-"""
-function getaffine(hdr::NIfTI1Header)
-    if hdr.sform_code > 0
-        return get_sform(hdr)
-    else
-        return get_qform(hdr)
-    end
+function getaffine(x)
+    sform_code(x) > 0 ? get_sform(x) : get_qform(x)
 end
 
 """
@@ -122,19 +110,18 @@ function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
 end
 
 """
-    orientation(img)::Tuple{Symbol,Symbol,Symbol}
+    orientation(data)::Tuple{Symbol,Symbol,Symbol}
 
 Returns a tuple providing the orientation of a NIfTI image.
 """
-orientation(x) = orientation(x.header)
 function orientation(hdr::NIfTI1Header)
-    if hdr.sform_code > 0
+    if sform_code(x) > 0
         return @inbounds _dir2ori(
             hdr.srow_x[1], hdr.srow_x[2], hdr.srow_x[3],
             hdr.srow_y[1], hdr.srow_y[2], hdr.srow_y[3],
             hdr.srow_z[1], hdr.srow_z[2], hdr.srow_z[3]
         )
-    elseif hdr.qform_code <= 0
+    elseif qform_code(x) <= 0
         return @inbounds _dir2ori(
             hdr.pixdim[2], 0, 0,
             0, hdr.pixdim[3], 0,
