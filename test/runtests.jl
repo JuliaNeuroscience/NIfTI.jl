@@ -33,34 +33,34 @@ extractto(GZIPPED_HDR, HDR)
 extractto(joinpath(dirname(@__FILE__), "data/example4d.img.gz"), IMG)
 
 function image_tests(fname, mmap)
-    file = niread(fname, mmap=mmap)
+    img = niread(fname, mmap=mmap)
 
     # Header
-    @test time_step(file.header) == 2000000 # Actually an error in the file AFAIK
-    @test voxel_size(file.header) ≈ Float32[2.0, 2.0, 2.2]
-    @test size(file) == (128, 96, 24, 2)
+    @test time_step(img.header) == 2000000 # Actually an error in the file AFAIK
+    @test voxel_size(img.header) ≈ Float32[2.0, 2.0, 2.2]
+    @test size(img) == (128, 96, 24, 2)
 
     # Content
-    @test file.raw[65, 49, 13, :][:] == [265, 266]
-    @test vox(file, 64, 48, 12, :)[:] == [265, 266]
-    @test vox(file, 69, 56, 13, :)[:] == [502, 521]
+    @test img.raw[65, 49, 13, :][:] == [265, 266]
+    @test vox(img, 64, 48, 12, :)[:] == [265, 266]
+    @test vox(img, 69, 56, 13, :)[:] == [502, 521]
 
-    @assert maximum(file) == maximum(file.raw)
+    @assert maximum(img) == maximum(img.raw)
 
-    @test getaffine(file) ≈ [
+    @test getaffine(img) ≈ [
         -2.0                    6.714715653593746e-19  9.081024511081715e-18  117.8551025390625
         6.714715653593746e-19  1.9737114906311035    -0.35552823543548584   -35.72294235229492
         8.25548088896093e-18   0.3232076168060303     2.171081781387329     -7.248798370361328
         0.0                    0.0                    0.0                   1.0
     ]
 
-    @test NIfTI.get_qform(file) ≈ [
+    @test NIfTI.get_qform(img) ≈ [
      -2.0          7.75482f-26  -6.93824f-27  117.855
       7.75482f-26  1.97371      -0.355528     -35.7229
       6.30749f-27  0.323208      2.17108       -7.2488
       0.0          0.0           0.0            1.0
     ]
-    @test NIfTI.orientation(file) == (:right, :posterior, :inferior)
+    @test NIfTI.orientation(img) == (:right, :posterior, :inferior)
 end
 
 image_tests(NII, false)
@@ -69,6 +69,16 @@ image_tests(HDR, false)
 image_tests(HDR, true)
 image_tests(GZIPPED_NII, false)
 image_tests(GZIPPED_HDR, false)
+
+@testset "Header Field Accessors" begin
+    img = niread(GZIPPED_NII)
+    @test NIfTI.freqdim(img) == 1
+    @test NIfTI.phasedim(img) == 2
+    @test NIfTI.slicedim(img) == 3
+    @test NIfTI.slice_start(img) == 1
+    @test NIfTI.slice_end(img) == 24
+    @test NIfTI.slice_duration(img) == 0
+end
 
 @test_throws ErrorException niread(GZIPPED_NII; mmap=true)
 @test_throws ErrorException niread(GZIPPED_HDR; mmap=true)
@@ -92,6 +102,12 @@ niwrite(BOOL_WRITE, NIVolume(mask))
 niwrite(BIT_WRITE, NIVolume(mask_bitarray))
 @test niread(BOOL_WRITE).raw == mask
 @test niread(BIT_WRITE).raw == mask_bitarray
+
+# Write and read INT16 volume
+const INT16_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
+vol_INT16 = rand(Int16, 3, 5, 7) # Array{Int16}
+niwrite(INT16_WRITE, NIVolume(vol_INT16))
+@test niread(INT16_WRITE).raw == vol_INT16
 
 # Open mmaped file for reading and writing
 const WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
@@ -124,3 +140,4 @@ GC.gc() # closes mmapped files
 @test NIfTI._dir2ori(1.0,  0.0, 0.0,
                      0.0, -1.0, 0.0,
                      0.0,  0.0, -1.0) == (:left, :anterior, :superior)
+
