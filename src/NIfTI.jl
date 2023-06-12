@@ -34,11 +34,6 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTIExtension[], raw)
 
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Int16,N}) where {N} =
-    NIVolume{Int16,N,typeof(raw)}(header, extensions, raw)
-NIVolume(header::NIfTI1Header, raw::AbstractArray{Int16,N}) where {N} =
-    NIVolume{Int16,N,typeof(raw)}(header, NIfTIExtension[], raw)
-
 NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
@@ -182,10 +177,10 @@ function NIVolume(
 end
 
 # Validates the header of a volume and updates it to match the volume's contents
-function niupdate(vol::NIVolume{T}) where {T}
+function niupdate(vol::NIVolume{T,N,R}) where {T,N,R}
     vol.header.sizeof_hdr = SIZEOF_HDR1
     vol.header.dim = to_dim_i16(size(vol.raw))
-    vol.header.datatype = eltype_to_int16(T)
+    vol.header.datatype = eltype_to_int16(eltype(R))
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
         Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
