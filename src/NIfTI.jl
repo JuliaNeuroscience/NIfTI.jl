@@ -33,11 +33,11 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTIExtension[], raw)
+
 NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
 NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
     NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
-
 
 header(x::NIVolume) = getfield(x, :header)
 
@@ -177,10 +177,10 @@ function NIVolume(
 end
 
 # Validates the header of a volume and updates it to match the volume's contents
-function niupdate(vol::NIVolume{T}) where {T}
+function niupdate(vol::NIVolume{T,N,R}) where {T,N,R}
     vol.header.sizeof_hdr = SIZEOF_HDR1
     vol.header.dim = to_dim_i16(size(vol.raw))
-    vol.header.datatype = eltype_to_int16(T)
+    vol.header.datatype = eltype_to_int16(eltype(R))
     vol.header.bitpix = nibitpix(T)
     vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
         Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
@@ -278,7 +278,9 @@ end
 
 # Allow file to be indexed like an array, but with indices yielding scaled data
 @inline getindex(f::NIVolume{T}, idx::Vararg{Int}) where {T} =
-    getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
+    f.header.scl_slope == zero(typeof(f.header.scl_slope)) ?
+        getindex(f.raw, idx...,) :
+        getindex(f.raw, idx...,) * f.header.scl_slope + f.header.scl_inter
 
 add1(x::Union{AbstractArray{T},T}) where {T<:Integer} = x + 1
 add1(::Colon) = Colon()
