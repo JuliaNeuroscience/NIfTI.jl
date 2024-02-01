@@ -1,5 +1,4 @@
 
-
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
     sz = pop!(packed_offsets)
@@ -96,25 +95,28 @@ function byteswap(hdr::NIfTI1Header)
 end
 
 """
-    freqdim(x)::Int
+    freqdim(img)::Int
 
-Returns the frequency dimension.
+Returns the frequency dimension associated with with `img`. `img` is an image or a collection of
+image related metadata. 
 """
 freqdim(x::NIfTI1Header) = Int(getfield(x, :dim_info) & 0x03)
 freqdim(x) = freqdim(header(x))
 
 """
-    phasedim(x)::Int
+    phasedim(img)::Int
 
-Returns the phase dimension.
+Returns the phase dimension associated with `img`. `img` is an image or a collection of
+image related metadata.
 """
 phasedim(x::NIfTI1Header) = Int((getfield(x, :dim_info) >> 2) & 0x03)
 phasedim(x) = phasedim(header(x))
 
 """
-    slicedim(x)::Int
+    slicedim(img)::Int
 
-Returns the slice dimension.
+Returns the slice dimension associated with `img`. `img` is an image or a collection of
+image related metadata.
 """
 slicedim(x::NIfTI1Header) = Int((getfield(x, :dim_info) >> 4) & 0x03)
 slicedim(x) = slicedim(header(x))
@@ -138,7 +140,7 @@ slice_end(x) = slice_end(header(x))
 """
     slice_duration(x)
 
-Time to acquire one slice
+Time to acquire one slice.
 """
 slice_duration(x::NIfTI1Header) = getfield(x, :slice_duration)
 slice_duration(x) = slice_duration(header(x))
