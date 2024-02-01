@@ -1,4 +1,8 @@
-
+const SPATIAL_UNIT_MULTIPLIERS = [
+    1000,   # 1 => NIfTI_UNITS_METER
+    1,      # 2 => NIfTI_UNITS_MM
+    0.001   # 3 => NIfTI_UNITS_MICRON
+]
 
 const SIZEOF_HDR1 = Int32(348)
 const SIZEOF_HDR2 = Int32(540)
@@ -200,13 +204,6 @@ function string_tuple(x::String, n::Int)
 end
 string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
-# Conversion factors to mm/ms
-# http://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields/nifti1fields_pages/xyzt_units.html
-const SPATIAL_UNIT_MULTIPLIERS = [
-    1000,   # 1 => NIfTI_UNITS_METER
-    1,      # 2 => NIfTI_UNITS_MM
-    0.001   # 3 => NIfTI_UNITS_MICRON
-]
 const TIME_UNIT_MULTIPLIERS = [
     1000,   # NIfTI_UNITS_SEC
     1,      # NIfTI_UNITS_MSEC

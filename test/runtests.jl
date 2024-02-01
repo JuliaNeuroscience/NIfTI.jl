@@ -37,7 +37,11 @@ function image_tests(fname, mmap)
 
     # Header
     @test time_step(img.header) == 2000000 # Actually an error in the file AFAIK
-    @test voxel_size(img.header) ≈ Float32[2.0, 2.0, 2.2]
+    # @test all(isapprox.(voxel_size(img.header), (2.0, 2.0, 2.2)))
+    vs1, vs2, vs3 = voxel_size(img.header)
+    @test isapprox(vs1, Float32(2.0))
+    @test isapprox(vs2, Float32(2.0))
+    @test isapprox(vs3, Float32(2.2))
     @test size(img) == (128, 96, 24, 2)
 
     # Content
