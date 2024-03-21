@@ -15,9 +15,9 @@ ni = niread("my.nii.gz") # gzipped NIfTI files are detected automatically
 
 The header is in `nii.header`; NIfTI extensions are in `nii.extensions`; the raw
 volume is in `nii.raw`.
-
+### abide
 To mmap the NIfTI file:
-
+### update JULIA
 ```julia
 ni = niread("my.nii", mmap=true)
 ```
@@ -34,7 +34,7 @@ d = vox(ni, x, y, z, t)       # Scaled by slope and intercept given in header, z
 d = ni[x, y, z, t]            # Scaled by slope and intercept given in header, one-based indexes
 d = ni.raw[x, y, z, t]        # Unscaled, one-based indexes
 ```
-Colons works everywhere, even with `vox`
+Colons works everywhere, even with `vox`, for voxel image processing
 
 To write a volume:
 ```julia
