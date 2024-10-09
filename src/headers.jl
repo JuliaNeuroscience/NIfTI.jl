@@ -7,7 +7,7 @@ function define_packed(ty::DataType)
     @eval begin
         function Base.read(io::IO, ::Type{$ty})
             bytes = read!(io, Array{UInt8}(undef, $sz...))
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes)+$(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
+            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes) + $(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
             if hdr.sizeof_hdr == ntoh(Int32(348))
                 return byteswap(hdr), true
             end
@@ -16,7 +16,7 @@ function define_packed(ty::DataType)
         function Base.write(io::IO, x::$ty)
             bytes = UInt8[]
             for name in fieldnames($ty)
-                append!(bytes, reinterpret(UInt8, [getfield(x,name)]))
+                append!(bytes, reinterpret(UInt8, [getfield(x, name)]))
             end
             write(io, bytes)
             $sz
@@ -25,11 +25,13 @@ function define_packed(ty::DataType)
     nothing
 end
 
-mutable struct NIfTI1Header
+abstract type NIfTIHeader end
+
+mutable struct NIfTI1Header <: NIfTIHeader
     sizeof_hdr::Int32
 
-    data_type::NTuple{10, UInt8}
-    db_name::NTuple{18, UInt8}
+    data_type::NTuple{10,UInt8}
+    db_name::NTuple{18,UInt8}
     extents::Int32
     session_error::Int16
     regular::Int8
@@ -58,8 +60,8 @@ mutable struct NIfTI1Header
     glmax::Int32
     glmin::Int32
 
-    descrip::NTuple{80, UInt8}
-    aux_file::NTuple{24, UInt8}
+    descrip::NTuple{80,UInt8}
+    aux_file::NTuple{24,UInt8}
 
     qform_code::Int16
     sform_code::Int16
@@ -70,19 +72,63 @@ mutable struct NIfTI1Header
     qoffset_y::Float32
     qoffset_z::Float32
 
-    srow_x::NTuple{4, Float32}
-    srow_y::NTuple{4, Float32}
-    srow_z::NTuple{4, Float32}
+    srow_x::NTuple{4,Float32}
+    srow_y::NTuple{4,Float32}
+    srow_z::NTuple{4,Float32}
 
-    intent_name::NTuple{16, UInt8}
+    intent_name::NTuple{16,UInt8}
 
-    magic::NTuple{4, UInt8}
+    magic::NTuple{4,UInt8}
 end
 define_packed(NIfTI1Header)
 
+mutable struct NIfTI2Header <: NIfTIHeader
+    sizeof_hdr::Int32
+    magic::NTuple{8,UInt8}
+    datatype::Int16
+    bitpix::Int16
+    dim::NTuple{8,Int64}
+    intent_p::NTuple{3,Float64}
+    pixdim::NTuple{8,Float64}
+    vox_offset::Int64
+    scl_slope::Float64
+    scl_inter::Float64
+    cal_max::Float64
+    cal_min::Float64
+    slice_duration::Float64
+    toffset::Float64
+    slice_start::Int64
+    slice_end::Int64
+
+    descrip::NTuple{80,UInt8}
+    aux_file::NTuple{24,UInt8}
+
+    qform_code::Int32
+    sform_code::Int32
+    quatern_b::Float32
+    quatern_c::Float32
+    quatern_d::Float32
+    qoffset_x::Float32
+    qoffset_y::Float32
+    qoffset_z::Float32
+
+    srow_x::NTuple{4,Float64}
+    srow_y::NTuple{4,Float64}
+    srow_z::NTuple{4,Float64}
+
+    slice_code::Int32
+    xyzt_units::Int32
+    intent_code::Int32
+    intent_name::NTuple{16,UInt8}
+    dim_info::UInt8
+    unused_str::NTuple{15,UInt8}
+end
+define_packed(NIfTI2Header)
+
+
 # byteswapping
 
-function byteswap(hdr::NIfTI1Header)
+function byteswap(hdr::NIfTIHeader)
     for fn in fieldnames(typeof(hdr))
         val = getfield(hdr, fn)
         if isa(val, Number) && sizeof(val) > 1
@@ -99,7 +145,7 @@ end
 
 Which slice corresponds to the first slice acquired during MRI acquisition (i.e. not padded slices).
 """
-slice_start(x::NIfTI1Header) = Int(getfield(x, :slice_start)) + 1
+slice_start(x::NIfTIHeader) = Int(getfield(x, :slice_start)) + 1
 slice_start(x) = slice_start(header(x))
 
 """
@@ -107,7 +153,7 @@ slice_start(x) = slice_start(header(x))
 
 Which slice corresponds to the last slice acquired during MRI acquisition (i.e. not padded slices).
 """
-slice_end(x::NIfTI1Header) = Int(getfield(x, :slice_end)) + 1
+slice_end(x::NIfTIHeader) = Int(getfield(x, :slice_end)) + 1
 slice_end(x) = slice_end(header(x))
 
 """
@@ -115,7 +161,7 @@ slice_end(x) = slice_end(header(x))
 
 Time to acquire one slice.
 """
-slice_duration(x::NIfTI1Header) = getfield(x, :slice_duration)
+slice_duration(x::NIfTIHeader) = getfield(x, :slice_duration)
 slice_duration(x) = slice_duration(header(x))
 
 """
@@ -123,7 +169,7 @@ slice_duration(x) = slice_duration(header(x))
 
 Return the number of spatial dimensions in the image.
 """
-sdims(x::NIfTI1Header) = min(Int(getfield(getfield(x, :dim), 1)), 3)
+sdims(x::NIfTIHeader) = min(Int(getfield(getfield(x, :dim), 1)), 3)
 sdims(x) = sdims(header(x))
 
 # Conversion factors to mm/ms
@@ -143,11 +189,11 @@ function to_spatial_multiplier(xyzt_units::UInt8)
 end
 
 """
-    NIfTI.voxel_size(header::NIfTI1Header)
+    NIfTI.voxel_size(header::NIfTIHeader)
 
-Get the voxel size **in mm** from a `NIfTI1Header`.
+Get the voxel size **in mm** from a `NIfTIHeader`.
 """
-function voxel_size(x::NIfTI1Header)
+function voxel_size(x::NIfTIHeader)
     sd = sdims(x)
     if sd === 0
         return ()
@@ -183,10 +229,10 @@ function to_dim_info(dim_info::Tuple{Integer,Integer,Integer})
 end
 
 # Returns or sets dim_info as a tuple whose values are the frequency, phase, and slice dimensions
-function dim_info(hdr::NIfTI1Header)
+function dim_info(hdr::NIfTIHeader)
     return (hdr.dim_info & 0x03, (hdr.dim_info >> 0x02) & 0x03, (hdr.dim_info >> 0x04) & 0x03)
 end
-function dim_info(header::NIfTI1Header, dim_info::Tuple{T, T, T}) where {T<:Integer}
+function dim_info(header::NIfTIHeader, dim_info::Tuple{T,T,T}) where {T<:Integer}
     header.dim_info = to_dim_info(dim_info)
 end
 
@@ -196,7 +242,7 @@ end
 Returns the frequency dimension associated with with `img`. `img` is an image or a collection of
 image related metadata. 
 """
-freqdim(x::NIfTI1Header) = Int(getfield(x, :dim_info) & 0x03)
+freqdim(x::NIfTIHeader) = Int(getfield(x, :dim_info) & 0x03)
 freqdim(x) = freqdim(header(x))
 
 """
@@ -205,7 +251,7 @@ freqdim(x) = freqdim(header(x))
 Returns the phase dimension associated with `img`. `img` is an image or a collection of
 image related metadata.
 """
-phasedim(x::NIfTI1Header) = Int((getfield(x, :dim_info) >> 0x02) & 0x03)
+phasedim(x::NIfTIHeader) = Int((getfield(x, :dim_info) >> 0x02) & 0x03)
 phasedim(x) = phasedim(header(x))
 
 """
@@ -214,6 +260,6 @@ phasedim(x) = phasedim(header(x))
 Returns the slice dimension associated with `img`. `img` is an image or a collection of
 image related metadata.
 """
-slicedim(x::NIfTI1Header) = Int((getfield(x, :dim_info) >> 0x04) & 0x03)
+slicedim(x::NIfTIHeader) = Int((getfield(x, :dim_info) >> 0x04) & 0x03)
 slicedim(x) = slicedim(header(x))
 

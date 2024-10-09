@@ -19,7 +19,7 @@ end
 end
 
 get_sform(x::NIVolume) = get_sform(x.header)
-function get_sform(hdr::NIfTI1Header)
+function get_sform(hdr::NIfTIHeader)
     if hdr.sform_code > 0
         return @inbounds Float32[
             hdr.srow_x[1]  hdr.srow_x[2]  hdr.srow_x[3]  hdr.srow_x[4]
@@ -34,7 +34,7 @@ function get_sform(hdr::NIfTI1Header)
 end
 
 get_qform(x::NIVolume) = get_qform(x.header)
-function get_qform(hdr::NIfTI1Header)
+function get_qform(hdr::NIfTIHeader)
     if hdr.qform_code <= 0
         return @inbounds Float32[
             hdr.pixdim[2]   0              0              0
@@ -84,11 +84,11 @@ getaffine(x::NIVolume) = getaffine(x.header)
 
 # Convert a NIfTI header to a 4x4 affine transformation matrix
 """
-    getaffine(hdr::NIfTI1Header)
+    getaffine(hdr::NIfTIHeader)
 
 Gets a 4x4 affine transformation matrix from a header's sform
 """
-function getaffine(hdr::NIfTI1Header)
+function getaffine(hdr::NIfTIHeader)
     if hdr.sform_code > 0
         return get_sform(hdr)
     else
@@ -97,11 +97,11 @@ function getaffine(hdr::NIfTI1Header)
 end
 
 """
-    function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
+    function setaffine(h::NIfTIHeader, affine::Array{T,2}) where {T}
 
-Set the affine of a `NIfTI1Header` to 4x4 affine matrix `affine`
+Set the affine of a `NIfTIHeader` to 4x4 affine matrix `affine`
 """
-function setaffine(h::NIfTI1Header, affine::Array{T,2}) where {T}
+function setaffine(h::NIfTIHeader, affine::Array{T,2}) where {T}
     size(affine, 1) == size(affine, 2) == 4 ||
         error("affine matrix must be 4x4")
     affine[4, 1] == affine[4, 2] == affine[4, 3] == 0 && affine[4, 4] == 1 ||
@@ -127,7 +127,7 @@ end
 Returns a tuple providing the orientation of a NIfTI image.
 """
 orientation(x) = orientation(x.header)
-function orientation(hdr::NIfTI1Header)
+function orientation(hdr::NIfTIHeader)
     if hdr.sform_code > 0
         return @inbounds _dir2ori(
             hdr.srow_x[1], hdr.srow_x[2], hdr.srow_x[3],
