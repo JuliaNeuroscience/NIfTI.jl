@@ -34,25 +34,21 @@ function apply_rotation!(out, A, data)
     Csub = pointer_to_array(pointer(C), 3)
 
     ic = InterpGridCoefs(ptrs[1], InterpLinear)
-    for i = 1:size(out, 3)
+    for i in aexs(out,3), j in axes(out,2), k in aexs(out,1)
         B[3] = i
-        for j = 1:size(out, 2)
-            B[2] = j
-            for k = 1:size(out, 1)
-                B[1] = k
-                # Convert voxels in targ coords to voxels in mov coords
-                A_mul_B!(C, A, B)
+        B[2] = j
+        B[1] = k
+        # Convert voxels in targ coords to voxels in mov coords
+        A_mul_B!(C, A, B)
 
-                # Interpolate voxels in targ coords from voxels in mov
-                # coords
-                set_position(ic, BCnan, false, Csub)
-                v = interp(ic, ptrs[1])
-                if !isnan(v)
-                    out[k, j, i, 1] = mayberound(v, eltype(out))
-                    for l = 2:size(data, 4)
-                        out[k, j, i, l] = mayberound(interp(ic, ptrs[l]), eltype(out))
-                    end
-                end
+        # Interpolate voxels in targ coords from voxels in mov
+        # coords
+        set_position(ic, BCnan, false, Csub)
+        v = interp(ic, ptrs[1])
+        if !isnan(v)
+            out[k, j, i, 1] = mayberound(v, eltype(out))
+            for l = 2:size(data, 4)
+                out[k, j, i, l] = mayberound(interp(ic, ptrs[l]), eltype(out))
             end
         end
     end
