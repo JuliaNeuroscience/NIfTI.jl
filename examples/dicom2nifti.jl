@@ -64,7 +64,7 @@ end
 function main()
     cmd = parse_commandline()
 
-    if cmd["axes"] == nothing
+    if cmd["axes"] === nothing
         axes = nothing
     else
         axes = uppercase(cmd["axes"])
@@ -96,7 +96,7 @@ function main()
         series_number = d[series_number_index].data[1]
 
         dicom_arr = get(dicoms, series_number, nothing)
-        if dicom_arr == nothing
+        if dicom_arr === nothing
             dicoms[series_number] = dicom_arr = {}
         end
         push!(dicom_arr, d)
@@ -146,7 +146,7 @@ function main()
         voxel_size = tuple(pixel_spacing..., slice_thickness)
 
         # Permute according to axes specified on command line
-        if axes != nothing
+        if axes !== nothing
             # Determine permutation of current volume to RAS
             ras = Array(Int, 3)
             sign = Array(Bool, 3)
