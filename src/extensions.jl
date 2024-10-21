@@ -141,11 +141,13 @@ function esize(ex::NIfTIExtension)
     return ret
 end
 
-function read_extensions(io, n)
+function read_extensions(io, n, swapbyte::Bool=false, skip_extension_flag::Bool=false)
     ret = NIfTIExtension[]
     if eof(io)
         return ret
-    else
+    end
+
+    if !skip_extension_flag
         b1 = read(io, UInt8)
         # GZIP doesn't skip so we read and throw away
         read(io, UInt8)
@@ -153,30 +155,41 @@ function read_extensions(io, n)
         read(io, UInt8)
         if b1 === zero(UInt8)
             return ret
-        else
-            counter = 0
-            while counter < (n - 1)
-                esize = read(io, Int32)
-                ec = read(io, Int32)
-                push!(ret, NIfTIExtension(ec, read!(io, Array{UInt8}(undef, esize - 8))))
-                counter += esize
-            end
-            return ret
         end
     end
+
+    swap_int32 = swapbyte ? bswap : x -> x
+
+    counter = 0
+    while counter < (n - 1)
+        esize = swap_int32(read(io, Int32))
+        ec = swap_int32(read(io, Int32))
+        push!(ret, NIfTIExtension(ec, read!(io, Array{UInt8}(undef, esize - 8))))
+        counter += esize
+    end
+    return ret
+
 end
 
-function write(io::IO, x::Vector{NIfTIExtension})
+function write(io::IO, x::Vector{NIfTIExtension}, swapbyte::Bool=false, skip_extension_flag::Bool=false)
     if isempty(x)
-        write(io, fill(UInt8(0), 4))
-    else
-        write(io, UInt8[1, 0, 0, 0])
-        for ex in x
-            write(io, Int32(esize(ex)))
-            write(io, ex.ecode)
-            write(io, ex.edata)
-#            write(io, zeros(UInt8, esize(ex) - length(ex.edata)))
+        if !skip_extension_flag
+            write(io, fill(UInt8(0), 4))
         end
+        return
     end
+    if !skip_extension_flag
+        write(io, UInt8[1, 0, 0, 0])
+    end
+
+    swap_int32 = swapbyte ? bswap : x -> x
+
+    for ex in x
+        write(io, swap_int32(Int32(esize(ex))))
+        write(io, swap_int32(ex.ecode))
+        write(io, ex.edata)
+        #       write(io, zeros(UInt8, esize(ex) - length(ex.edata)))
+    end
+
 end
 
