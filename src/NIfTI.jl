@@ -232,7 +232,7 @@ Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
-    ex = read_extensions(io, hdr.vox_offset - 352)
+    ex = read_extensions(io, hdr.vox_offset - 352, swapbyte=swapped)
 
     if hdr.magic === NP1_MAGIC
         vol = read_volume(io, to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
