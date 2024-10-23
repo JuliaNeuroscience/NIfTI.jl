@@ -149,12 +149,11 @@ end
 
 # Validates the header of a volume and updates it to match the volume's contents
 function niupdate(vol::NIVolume{T,N,R}) where {T,N,R}
-    vol.header.sizeof_hdr = SIZEOF_HDR1
     vol.header.dim = to_dim_i16(size(vol.raw))
     vol.header.datatype = eltype_to_int16(eltype(R))
     vol.header.bitpix = nibitpix(T)
-    vol.header.vox_offset = isempty(vol.extensions) ? Int32(352) :
-                            Int32(mapreduce(esize, +, vol.extensions) + SIZEOF_HDR1)
+    vol.header.vox_offset = isempty(vol.extensions) ? vol.header.sizeof_hdr :
+                            Int32(mapreduce(esize, +, vol.extensions) + vol.header.sizeof_hdr)
     vol
 end
 
@@ -240,7 +239,7 @@ Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
-    ex = read_extensions(io, hdr.vox_offset - 352)
+    ex = read_extensions(io, hdr.vox_offset - hdr.sizeof_hdr)
 
     if hdr.magic === NP1_MAGIC || hdr.magic == NP2_MAGIC
         vol = read_volume(io, to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
