@@ -141,7 +141,7 @@ function esize(ex::NIfTIExtension)
     return ret
 end
 
-function read_extensions(io, n, swapbyte::Bool=false, skip_extension_flag::Bool=false)
+function read_extensions(io, n; swapbyte::Bool=false, skip_extension_flag::Bool=false)
     ret = NIfTIExtension[]
     if eof(io)
         return ret
@@ -159,8 +159,7 @@ function read_extensions(io, n, swapbyte::Bool=false, skip_extension_flag::Bool=
     end
 
     swap_int32 = swapbyte ? bswap : x -> x
-
-    counter = 0
+    counter = skip_extension_flag ? 0 : 4
     while counter < (n - 1)
         esize = swap_int32(read(io, Int32))
         ec = swap_int32(read(io, Int32))
@@ -171,7 +170,12 @@ function read_extensions(io, n, swapbyte::Bool=false, skip_extension_flag::Bool=
 
 end
 
-function write(io::IO, x::Vector{NIfTIExtension}, swapbyte::Bool=false, skip_extension_flag::Bool=false)
+write(path::AbstractString, x::Vector{NIfTIExtension}; swapbyte::Bool=false, skip_extension_flag::Bool=false) =
+open(path, "w") do io
+    write(io, x, swapbyte=swapbyte, skip_extension_flag=skip_extension_flag)
+end
+
+function write(io::IO, x::Vector{NIfTIExtension}; swapbyte::Bool=false, skip_extension_flag::Bool=false)
     if isempty(x)
         if !skip_extension_flag
             write(io, fill(UInt8(0), 4))

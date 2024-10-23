@@ -52,17 +52,17 @@ function image_tests(fname, mmap)
     @assert maximum(img) == maximum(img.raw)
 
     @test getaffine(img) ≈ [
-        -2.0                    6.714715653593746e-19  9.081024511081715e-18  117.8551025390625
-        6.714715653593746e-19  1.9737114906311035    -0.35552823543548584   -35.72294235229492
-        8.25548088896093e-18   0.3232076168060303     2.171081781387329     -7.248798370361328
-        0.0                    0.0                    0.0                   1.0
+        -2.0 6.714715653593746e-19 9.081024511081715e-18 117.8551025390625
+        6.714715653593746e-19 1.9737114906311035 -0.35552823543548584 -35.72294235229492
+        8.25548088896093e-18 0.3232076168060303 2.171081781387329 -7.248798370361328
+        0.0 0.0 0.0 1.0
     ]
 
     @test NIfTI.get_qform(img) ≈ [
-     -2.0          7.75482f-26  -6.93824f-27  117.855
-      7.75482f-26  1.97371      -0.355528     -35.7229
-      6.30749f-27  0.323208      2.17108       -7.2488
-      0.0          0.0           0.0            1.0
+        -2.0 7.75482f-26 -6.93824f-27 117.855
+        7.75482f-26 1.97371 -0.355528 -35.7229
+        6.30749f-27 0.323208 2.17108 -7.2488
+        0.0 0.0 0.0 1.0
     ]
     @test NIfTI.orientation(img) == (:right, :posterior, :inferior)
 end
@@ -118,30 +118,59 @@ const WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 const VERIFY_WRITE = joinpath(TEMP_DIR_NAME, "$(tempname()).nii")
 cp(NII, WRITE)
 img = niread(WRITE; mmap=true, mode="r+")
-img.raw[1,1,1,1] = 5
-img.raw[:,2,1,1] = ones(size(img)[1])
+img.raw[1, 1, 1, 1] = 5
+img.raw[:, 2, 1, 1] = ones(size(img)[1])
 cp(WRITE, VERIFY_WRITE)
-@test niread(VERIFY_WRITE)[1,1,1,1] == 5
-@test niread(VERIFY_WRITE)[:,2,1,1] == ones(size(img)[1])
+@test niread(VERIFY_WRITE)[1, 1, 1, 1] == 5
+@test niread(VERIFY_WRITE)[:, 2, 1, 1] == ones(size(img)[1])
 # Site is currently down TODO: reintroduce this test when site is up
 # Big endian
 # const BE = "$(tempname()).nii"
 # download("https://nifti.nimh.nih.gov/nifti-1/data/avg152T1_LR_nifti.nii.gz", BE)
 img = niread(joinpath(dirname(@__FILE__), "data/avg152T1_LR_nifti.nii.gz"))
-@test size(img) == (91,109,91)
+@test size(img) == (91, 109, 91)
 
 GC.gc() # closes mmapped files
 
 @test NIfTI._dir2ori(-1.0, 0.0, 0.0,
-                      0.0, 1.0, 0.0,
-                      0.0, 0.0, 1.0) == (:right, :posterior, :inferior)
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0) == (:right, :posterior, :inferior)
 
-@test NIfTI._dir2ori(1.0,  0.0, 0.0,
-                     0.0, -1.0, 0.0,
-                     0.0,  0.0, 1.0) == (:left, :anterior, :inferior)
+@test NIfTI._dir2ori(1.0, 0.0, 0.0,
+    0.0, -1.0, 0.0,
+    0.0, 0.0, 1.0) == (:left, :anterior, :inferior)
 
 
-@test NIfTI._dir2ori(1.0,  0.0, 0.0,
-                     0.0, -1.0, 0.0,
-                     0.0,  0.0, -1.0) == (:left, :anterior, :superior)
+@test NIfTI._dir2ori(1.0, 0.0, 0.0,
+    0.0, -1.0, 0.0,
+    0.0, 0.0, -1.0) == (:left, :anterior, :superior)
+
+
+@testset "Extension Read Write" begin
+    img = niread(GZIPPED_NII)
+    temp_bin = "$(tempname()).bin"
+    NIfTI.write(temp_bin, img.extensions)
+    extensions = NIfTI.read_extensions(open(temp_bin), 68)
+    fd = open(temp_bin, "r")
+    chunk = read(fd, Int32)
+    sys_order_size = read(fd, Int32)
+    sys_order_ecode = read(fd, Int32)
+    close(fd)
+    @test (chunk == 1 || chunk == bswap(Int32(1)))
+    @test sys_order_size == 32
+    @test extensions[1].ecode == sys_order_ecode
+
+    NIfTI.write(temp_bin, img.extensions, swapbyte=true, skip_extension_flag=true)
+
+    fd = open(temp_bin, "r")
+    reverse_order_size = read(fd, Int32)
+    reverse_order_ecode = read(fd, Int32)
+    close(fd)
+    extensions = NIfTI.read_extensions(open(temp_bin), 64, swapbyte=true, skip_extension_flag=true)
+    @test extensions[1].ecode == sys_order_ecode
+
+    @test reverse_order_size == bswap(Int32(sys_order_size))
+    @test reverse_order_ecode == bswap(Int32(sys_order_ecode))
+end
+
 
