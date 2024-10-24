@@ -106,13 +106,13 @@ function NIVolume(
         t = T
     end
 
-    if extensions == nothing
+    if extensions === nothing
         extensions = NIfTIExtension[]
     end
 
     method2 = qfac != 0 || quatern_b != 0 || quatern_c != 0 || quatern_d != 0 || qoffset_x != 0 ||
-              qoffset_y != 0 || qoffset_z != 0
-    method3 = orientation != nothing
+        qoffset_y != 0 || qoffset_z != 0
+    method3 = orientation !== nothing
 
     if method2 && method3
         error("Orientation parameters for Method 2 and Method 3 are mutually exclusive")
