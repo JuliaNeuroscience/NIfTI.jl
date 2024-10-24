@@ -111,7 +111,7 @@ function NIVolume(
     end
 
     method2 = qfac != 0 || quatern_b != 0 || quatern_c != 0 || quatern_d != 0 || qoffset_x != 0 ||
-        qoffset_y != 0 || qoffset_z != 0
+              qoffset_y != 0 || qoffset_z != 0
     method3 = orientation !== nothing
 
     if method2 && method3
@@ -152,7 +152,7 @@ function niupdate(vol::NIVolume{T,N,R}) where {T,N,R}
     vol.header.dim = to_dim_i16(size(vol.raw))
     vol.header.datatype = eltype_to_int16(eltype(R))
     vol.header.bitpix = nibitpix(T)
-    vol.header.vox_offset = isempty(vol.extensions) ? vol.header.sizeof_hdr :
+    vol.header.vox_offset = isempty(vol.extensions) ? vol.header.sizeof_hdr + 4 :
                             Int32(mapreduce(esize, +, vol.extensions) + vol.header.sizeof_hdr)
     vol
 end
@@ -239,7 +239,7 @@ Read a NIfTI file to a NIVolume. Set `mmap=true` to memory map the volume.
 function niread(file::AbstractString; mmap::Bool=false, mode::AbstractString="r")
     io = niopen(file, mode)
     hdr, swapped = read_header(io)
-    ex = read_extensions(io, hdr.vox_offset - hdr.sizeof_hdr)
+    ex = read_extensions(io, hdr.vox_offset - hdr.sizeof_hdr - 4)
 
     if hdr.magic === NP1_MAGIC || hdr.magic == NP2_MAGIC
         vol = read_volume(io, to_eltype(hdr.datatype), to_dimensions(hdr.dim), mmap)
