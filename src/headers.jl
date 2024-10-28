@@ -88,7 +88,9 @@ mutable struct NIfTI2Header <: NIfTIHeader
     datatype::Int16
     bitpix::Int16
     dim::NTuple{8,Int64}
-    intent_p::NTuple{3,Float64}
+    intent_p1::Float64
+    intent_p2::Float64
+    intent_p3::Float64
     pixdim::NTuple{8,Float64}
     vox_offset::Int64
     scl_slope::Float64
@@ -105,12 +107,12 @@ mutable struct NIfTI2Header <: NIfTIHeader
 
     qform_code::Int32
     sform_code::Int32
-    quatern_b::Float32
-    quatern_c::Float32
-    quatern_d::Float32
-    qoffset_x::Float32
-    qoffset_y::Float32
-    qoffset_z::Float32
+    quatern_b::Float64
+    quatern_c::Float64
+    quatern_d::Float64
+    qoffset_x::Float64
+    qoffset_y::Float64
+    qoffset_z::Float64
 
     srow_x::NTuple{4,Float64}
     srow_y::NTuple{4,Float64}
