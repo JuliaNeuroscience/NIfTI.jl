@@ -34,10 +34,16 @@ NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::Abstract
 NIVolume(header::NIfTI1Header, raw::AbstractArray{T,N}) where {T<:Number,N} =
     NIVolume{typeof(one(T)*1f0+1f0),N,typeof(raw)}(header, NIfTIExtension[], raw)
 
-NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Bool,N}) where {N} =
-    NIVolume{Bool,N,typeof(raw)}(header, extensions, raw)
-NIVolume(header::NIfTI1Header, raw::AbstractArray{Bool,N}) where {N} =
-    NIVolume{Bool,N,typeof(raw)}(header, NIfTIExtension[], raw)
+NIVolume(header::NIfTI1Header, extensions::Vector{NIfTIExtension}, raw::AbstractArray{Int16,N}) where {N} =
+    NIVolume{Int16,N,typeof(raw)}(header, extensions, raw)
+NIVolume(header::NIfTI1Header, raw::AbstractArray{Int16,N}) where {N} =
+    NIVolume{Int16,N,typeof(raw)}(header, NIfTIExtension[], raw)
+
+function string_tuple(x::String, n::Int)
+    padding = zeros(UInt8, n-length(Vector{UInt8}(x)))
+    (Vector{UInt8}(x)..., padding...)
+end
+string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
 header(x::NIVolume) = getfield(x, :header)
 
