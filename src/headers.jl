@@ -25,9 +25,12 @@ function define_packed(ty::DataType)
     nothing
 end
 
-abstract type NIfTIHeader end
+"""
+    NIfTI1Header
 
-mutable struct NIfTI1Header <: NIfTIHeader
+NIfTI header for the version 1 specification.
+"""
+mutable struct NIfTI1Header
     sizeof_hdr::Int32
 
     data_type::NTuple{10,UInt8}
@@ -82,7 +85,12 @@ mutable struct NIfTI1Header <: NIfTIHeader
 end
 define_packed(NIfTI1Header)
 
-mutable struct NIfTI2Header <: NIfTIHeader
+"""
+    NIfTI2Header
+
+NIfTI header for the version 2 specification.
+"""
+mutable struct NIfTI2Header
     sizeof_hdr::Int32
     magic::NTuple{8,UInt8}
     datatype::Int16
@@ -127,6 +135,17 @@ mutable struct NIfTI2Header <: NIfTIHeader
 end
 define_packed(NIfTI2Header)
 
+"""
+    NIfTIHeader = Union{NIfTI1Header, NIfTI2Header}
+
+A union of both NIfTI header data structures.
+
+Most code should be written to be compatible with both headers in mind so that
+functions work generically across versions (e.g., `foo(::NIfTIHeader)`).
+
+See also: [`NIfTI1Header`](@ref), [`NIfTI2Header`](@ref)
+"""
+const NIfTIHeader = Union{NIfTI1Header, NIfTI2Header}
 
 # byteswapping
 
@@ -264,4 +283,3 @@ image related metadata.
 """
 slicedim(x::NIfTIHeader) = Int((getfield(x, :dim_info) >> 0x04) & 0x03)
 slicedim(x) = slicedim(header(x))
-
