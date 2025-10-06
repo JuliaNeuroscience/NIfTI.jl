@@ -137,7 +137,7 @@ Int32). Therefore, `8 + sizeof(ex.edata)` should be divisible by 16.
 """
 function esize(ex::NIfTIExtension)
     ret = 8 + length(ex.edata)
-    @assert ret%16 != 0 "NIfTIExtension has innapropriate size. See docstrings for more details."
+    @assert ret%16 == 0 "NIfTIExtension has innapropriate size. See docstrings for more details."
     return ret
 end
 
