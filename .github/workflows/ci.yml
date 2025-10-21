@@ -24,7 +24,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v1
+      - uses: actions/cache@v4
         env:
           cache-name: cache-artifacts
         with:
@@ -40,4 +40,3 @@ jobs:
       - uses: codecov/codecov-action@v1
         with:
           file: lcov.info
-
