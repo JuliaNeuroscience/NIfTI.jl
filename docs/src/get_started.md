@@ -34,11 +34,11 @@ with_theme(theme_light()) do
     lo = sgrid.layout
     nc = ncols(lo)
 
-    plt = volume!(ax, 1..size(img,1), 1..size(img,2), 1..size(img,3), Array(img);
+    plt = volume!(ax, 1..size(img,1), 1..size(img,2), 1..size(img,3), img;
         colorrange = (1, 3000), lowclip=:transparent, highclip=:white,
         colormap = cmap_alpha, transparency = true)
     # add volume slices    
-    plt_slices = volumeslices!(ax, x, y, z, Array(img); colormap = cmap,
+    plt_slices = volumeslices!(ax, x, y, z, img; colormap = cmap,
         colorrange = (10, 3000), highclip=:white,
         # transparency = true
         )
