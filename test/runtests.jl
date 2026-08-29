@@ -146,3 +146,22 @@ GC.gc() # closes mmapped files
     0.0, 0.0, -1.0) == (:left, :anterior, :superior)
 
 
+
+@testset "bitpix matches datatype on write" begin
+    # bitpix is the number of bits per voxel as stored, so it has to agree with
+    # datatype, for every type NIfTI.jl can write.
+    dir = mktempdir()
+    expected = Dict(Bool => 1, UInt8 => 8, Int8 => 8, Int16 => 16, UInt16 => 16,
+                    Int32 => 32, UInt32 => 32, Int64 => 64, UInt64 => 64,
+                    Float32 => 32, Float64 => 64, ComplexF32 => 64, ComplexF64 => 128)
+    for (T, bits) in expected
+        img = T <: Complex ? rand(T, 4, 4, 2) :
+              T === Bool ? rand(Bool, 4, 4, 2) : T.(rand(0:5, 4, 4, 2))
+        path = joinpath(dir, "bitpix_$T.nii")
+        niwrite(path, NIVolume(img))
+        vol = niread(path)
+        @test vol.header.bitpix == bits
+        @test eltype(vol.raw) === T
+        @test vol.raw == img
+    end
+end

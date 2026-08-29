@@ -151,7 +151,7 @@ end
 function niupdate(vol::NIVolume{T,N,R}) where {T,N,R}
     vol.header.dim = to_dim_i16(size(vol.raw))
     vol.header.datatype = eltype_to_int16(eltype(R))
-    vol.header.bitpix = nibitpix(T)
+    vol.header.bitpix = nibitpix(eltype(R))
     vol.header.vox_offset = isempty(vol.extensions) ? vol.header.sizeof_hdr + 4 :
                             Int32(mapreduce(esize, +, vol.extensions) + vol.header.sizeof_hdr)
     vol
