@@ -1,20 +1,23 @@
 using NIfTI
 using Documenter
+using DocumenterVitepress
 
 makedocs(;
     modules=[NIfTI],
-    repo="https://github.com/JuliaNeuroscience/NIfTI.jl/blob/{commit}{path}#{line}"
     sitename="NIfTI.jl",
-    format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://JuliaNeuroscience.github.io/NIfTI.jl",
-        assets=String[],
+    format=DocumenterVitepress.MarkdownVitepress(
+        repo = "github.com/JuliaNeuroscience/NIfTI.jl", # this must be the full URL!
+        devbranch = "master",
+        devurl="dev";
     ),
     pages=[
-        "Home" => "index.md",
+        "Get Started" => "get_started.md",
+        "API" => "api.md"
     ],
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo="github.com/JuliaNeuroscience/NIfTI.jl",
+    devbranch = "master",
+    push_preview = true,
 )
