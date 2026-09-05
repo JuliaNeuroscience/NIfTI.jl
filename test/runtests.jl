@@ -165,3 +165,22 @@ GC.gc() # closes mmapped files
         @test vol.raw == img
     end
 end
+
+@testset "header serialisation" begin
+    # written field by field: the same bytes as the fields concatenated
+    fieldbytes(hdr) = vcat([reinterpret(UInt8, [getfield(hdr, f)]) for f in fieldnames(typeof(hdr))]...)
+    nifti2 = joinpath(dirname(@__FILE__), "data/example_nifti2.nii.gz")
+    for hdr in (niread(GZIPPED_NII).header, niread(nifti2).header, NIVolume(rand(Float32, 4, 3, 2); descrip="described").header)
+        io = IOBuffer()
+        @test write(io, hdr) == hdr.sizeof_hdr
+        @test take!(io) == fieldbytes(hdr)
+        # a byte swapped header is recognised as such and reads back as the original
+        swapped = NIfTI.byteswap(deepcopy(hdr))
+        @test swapped.sizeof_hdr == bswap(hdr.sizeof_hdr)
+        write(io, swapped)
+        back, was_swapped = read(IOBuffer(take!(io)), typeof(hdr))
+        @test was_swapped
+        @test all(getfield(back, f) == getfield(hdr, f) for f in fieldnames(typeof(hdr)))
+    end
+    @test_throws ArgumentError NIVolume(zeros(2, 2); descrip=repeat("x", 81))
+end
