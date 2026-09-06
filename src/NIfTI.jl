@@ -118,12 +118,11 @@ function NIVolume(
         error("Orientation parameters for Method 2 and Method 3 are mutually exclusive")
     end
 
-    if method3
-        if size(orientation) != (3, 4)
-            error("Orientation matrix must be of dimensions (3, 4)")
-        end
-    else
-        orientation = zeros(Float32, 3, 4)
+    # a new variable, not a reassignment of the keyword: a reassigned variable
+    # captured by the closures below would be boxed and lose its type
+    srow = orientation === nothing ? zeros(Float32, 3, 4) : orientation
+    if size(srow) != (3, 4)
+        error("Orientation matrix must be of dimensions (3, 4)")
     end
 
     if slice_start == 0 && slice_end == 0 && dim_info[3] != 0
@@ -131,7 +130,7 @@ function NIVolume(
         slice_end = size(raw, dim_info[3]) - 1
     end
 
-    NIVolume(NIfTI1Header(SIZEOF_HDR1, string_tuple(data_type, 10), string_tuple(db_name, 18), extents, session_error,
+    NIVolume(NIfTI1Header(SIZEOF_HDR1, string_tuple(data_type, Val(10)), string_tuple(db_name, Val(18)), extents, session_error,
             regular, to_dim_info(dim_info), to_dim_i16(size(raw)), intent_p1, intent_p2,
             intent_p3, intent_code, eltype_to_int16(t), nibitpix(t),
             slice_start, (qfac, voxel_size..., time_step, 0, 0, 0), 352,
@@ -141,10 +140,10 @@ function NIVolume(
             UInt8(slice_code),
             UInt8(xyzt_units),
             cal_max, cal_min, slice_duration,
-            toffset, glmax, glmin, string_tuple(descrip, 80), string_tuple(aux_file, 24), (method2 || method3),
+            toffset, glmax, glmin, string_tuple(descrip, Val(80)), string_tuple(aux_file, Val(24)), (method2 || method3),
             method3, quatern_b, quatern_c, quatern_d,
-            qoffset_x, qoffset_y, qoffset_z, (orientation[1, :]...,),
-            (orientation[2, :]...,), (orientation[3, :]...,), string_tuple(intent_name, 16), NP1_MAGIC), extensions, raw)
+            qoffset_x, qoffset_y, qoffset_z, ntuple(j -> srow[1, j], Val(4)),
+            ntuple(j -> srow[2, j], Val(4)), ntuple(j -> srow[3, j], Val(4)), string_tuple(intent_name, Val(16)), NP1_MAGIC), extensions, raw)
 end
 
 # Validates the header of a volume and updates it to match the volume's contents
