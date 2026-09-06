@@ -183,4 +183,6 @@ end
         @test all(getfield(back, f) == getfield(hdr, f) for f in fieldnames(typeof(hdr)))
     end
     @test_throws ArgumentError NIVolume(zeros(2, 2); descrip=repeat("x", 81))
+    @test_throws ErrorException NIVolume(zeros(2, 2); orientation=zeros(Float32, 4, 4))
+    @test NIVolume(zeros(2, 2); orientation=Float32[1 0 0 0; 0 1 0 0; 0 0 1 0]).header.srow_x == (1, 0, 0, 0)
 end
