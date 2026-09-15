@@ -1,25 +1,36 @@
 
+# Reading, writing and byte swapping of a header are generated field by field
+# from the packed on-disk layout, so that none of them needs to iterate over
+# field names at run time. That keeps them free of dynamic dispatch, which is
+# what static compilation with `juliac --trim` requires.
 function define_packed(ty::DataType)
     packed_offsets = cumsum([sizeof(x) for x in ty.types])
     sz = pop!(packed_offsets)
     pushfirst!(packed_offsets, 0)
+    fields = 1:length(packed_offsets)
+    swaps = [T <: Number && sizeof(T) > 1 ? :(ntoh(getfield(hdr, $i))) :
+             T <: NTuple && sizeof(eltype(T)) > 1 ? :(map(ntoh, getfield(hdr, $i))) : nothing
+             for (i, T) in enumerate(ty.types)]
 
     @eval begin
         function Base.read(io::IO, ::Type{$ty})
-            bytes = read!(io, Array{UInt8}(undef, $sz...))
-            hdr = $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes) + $(packed_offsets[i])))) for i = 1:length(packed_offsets)]...,))
-            if hdr.sizeof_hdr == ntoh(Int32(348))
+            bytes = read!(io, Array{UInt8}(undef, $sz))
+            hdr = GC.@preserve bytes $(Expr(:new, ty, [:(unsafe_load(convert(Ptr{$(ty.types[i])}, pointer(bytes) + $(packed_offsets[i])))) for i in fields]...))
+            if hdr.sizeof_hdr == ntoh(Int32($sz))
                 return byteswap(hdr), true
             end
             hdr, false
         end
         function Base.write(io::IO, x::$ty)
-            bytes = UInt8[]
-            for name in fieldnames($ty)
-                append!(bytes, reinterpret(UInt8, [getfield(x, name)]))
+            bytes = Vector{UInt8}(undef, $sz)
+            GC.@preserve bytes begin
+                $([:(unsafe_store!(convert(Ptr{$(ty.types[i])}, pointer(bytes) + $(packed_offsets[i])), getfield(x, $i))) for i in fields]...)
             end
             write(io, bytes)
-            $sz
+        end
+        function byteswap(hdr::$ty)
+            $([:(setfield!(hdr, $i, $swap)) for (i, swap) in enumerate(swaps) if swap !== nothing]...)
+            hdr
         end
     end
     nothing
@@ -146,20 +157,6 @@ functions work generically across versions (e.g., `foo(::NIfTIHeader)`).
 See also: [`NIfTI1Header`](@ref), [`NIfTI2Header`](@ref)
 """
 const NIfTIHeader = Union{NIfTI1Header, NIfTI2Header}
-
-# byteswapping
-
-function byteswap(hdr::NIfTIHeader)
-    for fn in fieldnames(typeof(hdr))
-        val = getfield(hdr, fn)
-        if isa(val, Number) && sizeof(val) > 1
-            setfield!(hdr, fn, ntoh(val))
-        elseif isa(val, NTuple) && sizeof(eltype(val)) > 1
-            setfield!(hdr, fn, map(ntoh, val))
-        end
-    end
-    hdr
-end
 
 """
     NIfTI.slice_start(x)::Int

@@ -197,12 +197,11 @@ function hdr_to_img(file::AbstractString)
     end
 end
 
-function string_tuple(x::String, n::Int)
-    a = codeunits(x)
-    padding = zeros(UInt8, n-length(a))
-    (a..., padding...)
+# A string as the zero-padded NTuple{n,UInt8} of a header field
+function string_tuple(x::AbstractString, ::Val{n}) where n
+    ncodeunits(x) <= n || throw(ArgumentError("\"$x\" is longer than the $n bytes of its header field"))
+    ntuple(i -> i <= ncodeunits(x) ? codeunit(x, i) : 0x00, Val(n))
 end
-string_tuple(x::AbstractString) = string_tuple(bytestring(x))
 
 const TIME_UNIT_MULTIPLIERS = [
     1000,   # NIfTI_UNITS_SEC
